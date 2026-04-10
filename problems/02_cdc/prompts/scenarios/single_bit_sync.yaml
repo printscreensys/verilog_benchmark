@@ -1,0 +1,95 @@
+name: "single_bit_sync"
+category: "cdc"
+difficulty: "easy"
+
+description: |
+  Generate a proper two-flop synchronizer for crossing a single-bit control signal
+  from a fast clock domain to a slow clock domain.
+
+prompt_template: |
+  Design a synthesizable CDC synchronizer module for single-bit signals.
+  
+  **Module Specification**:
+  - Module name: `cdc_single_bit_sync`
+  - Parameters:
+    - `SYNC_STAGES = 2` (configurable number of synchronization stages)
+    - `RESET_VALUE = 1'b0` (reset value for synchronizer flops)
+  - Ports:
+    - `clk_dst` - Destination clock domain
+    - `rst_dst_n` - Asynchronous reset (active low) in destination domain
+    - `signal_in` - Input signal from source clock domain
+    - `signal_out` - Synchronized signal in destination domain
+  
+  **Requirements**:
+  1. Use standard multi-flop synchronizer structure
+  2. Must prevent metastability propagation
+  3. Must be fully synthesizable (no behavioral delays)
+  4. Add appropriate synthesis attributes to prevent optimization
+  5. Provide timing constraints for the synchronizer
+  
+  **Additional notes**:
+  - The source clock is 500 MHz, destination clock is 100 MHz
+  - Signal is a level-sensitive control signal (not a pulse)
+  - No need for handshake or feedback for this implementation
+  
+  Provide the complete RTL code.
+
+system_prompt: |
+  You are a CDC expert designing robust clock domain crossing circuits.
+  Always use proper synchronizer structures and include synthesis attributes.
+
+variables:
+  src_freq_mhz: 500
+  dst_freq_mhz: 100
+  sync_stages: 2
+
+top_module: "cdc_single_bit_sync"
+
+expected_features:
+  - "Multi-flop synchronizer with parameterized stages"
+  - "ASYNC_REG synthesis attribute"
+  - "Proper reset handling"
+  - "No combinational logic between flops"
+
+cdc_checks:
+  - check: "sync_stages >= 2"
+    metric: "CDC-SAFE"
+  - check: "no_combinational_path"
+    metric: "CDC-SAFE"
+  - check: "proper_attributes"
+    metric: "CDC-SAFE"
+
+golden_reference: |
+  module cdc_single_bit_sync #(
+      parameter SYNC_STAGES = 2,
+      parameter RESET_VALUE = 1'b0
+  ) (
+      input  logic clk_dst,
+      input  logic rst_dst_n,
+      input  logic signal_in,
+      output logic signal_out
+  );
+      
+      // Synchronizer registers
+      (* ASYNC_REG = "TRUE" *) logic [SYNC_STAGES-1:0] sync_reg;
+      
+      // Synchronizer chain
+      always_ff @(posedge clk_dst or negedge rst_dst_n) begin
+          if (!rst_dst_n) begin
+              sync_reg <= {SYNC_STAGES{RESET_VALUE}};
+          end else begin
+              sync_reg <= {sync_reg[SYNC_STAGES-2:0], signal_in};
+          end
+      end
+      
+      // Output assignment
+      assign signal_out = sync_reg[SYNC_STAGES-1];
+      
+  endmodule
+
+sdc_constraints: |
+  # CDC Synchronizer constraints
+  set_false_path -from [get_ports signal_in] -to [get_pins sync_reg[0]/D]
+  
+  # Max delay for synchronizer chain (optional)
+  set_max_delay -from [get_pins sync_reg[0]/Q] -to [get_pins sync_reg[1]/D] 2.0
