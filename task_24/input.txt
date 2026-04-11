@@ -1,0 +1,22 @@
+Design a Verilog module named `cdc_bus_sync` that safely transfers a 16-bit data bus from a source clock domain (`clk_a`) to an asynchronous destination clock domain (`clk_b`) using a MUX-based synchronizer.
+
+Module Interface:
+- input clk_a
+- input rst_n_a (active low asynchronous reset)
+- input [15:0] data_a
+- input valid_a
+
+- input clk_b
+- input rst_n_b (active low asynchronous reset)
+- output [15:0] data_b
+- output valid_b
+
+Behavioral Requirements:
+1. To prevent Data Incoherency (CDC skew violations), you MUST NOT use a multi-bit shift register synchronizer on `data_a`.
+2. Implement a 1-bit control synchronizer: Synchronize `valid_a` into the `clk_b` domain using a standard 2-flop or 3-flop synchronizer chain.
+3. Edge Detection: Detect the rising edge of the synchronized `valid_a` signal in the `clk_b` domain.
+4. Data Capture: Exactly on the cycle where the rising edge of the synchronized valid signal is detected, capture the raw asynchronous `data_a` directly into the `data_b` output register.
+5. On the same cycle, assert `valid_b` for exactly one `clk_b` cycle. Otherwise, `valid_b` must be 0.
+6. Assume the upstream logic holding `data_a` will keep it strictly stable while `valid_a` is active.
+
+Provide only the Verilog module implementation. Do not include testbenches. Use Verilog-2001 syntax.

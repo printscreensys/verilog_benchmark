@@ -1,0 +1,22 @@
+Design a Verilog module named `shared_reg` that acts as a shared 32-bit register for two different agents (Agent A and Agent B).
+
+Module Interface:
+- input clk
+- input rst_n (active low asynchronous reset)
+- input req_a
+- input [31:0] data_a
+- input req_b
+- input [31:0] data_b
+- output [31:0] read_data
+
+Behavioral Requirements:
+1. When `rst_n` is 0, the internal 32-bit register should be cleared to 0.
+2. The `read_data` output should continuously display the value of the internal register.
+3. Race Condition Resolution (Priority Arbitration):
+   - Both Agent A and Agent B can request a write on the same clock cycle. 
+   - Agent A has STRICT PRIORITY over Agent B.
+   - On the rising edge of `clk`, if `req_a` is 1, the register must store `data_a`, regardless of `req_b`.
+   - If `req_a` is 0 and `req_b` is 1, the register must store `data_b`.
+   - If neither request is active, the register must retain its current value.
+
+Provide only the Verilog module implementation. Do not include testbenches.

@@ -1,0 +1,27 @@
+Design a Verilog module named `ucie_flit_packager` that acts as a Die-to-Die (D2D) wrapper in Streaming Mode. It packetizes 64-bit SoC data into 72-bit flits for a chiplet interconnect.
+
+Module Interface:
+- input clk
+- input rst_n (active low asynchronous reset)
+// SoC Interface (Source)
+- input [63:0] soc_data
+- input soc_valid
+- output soc_ready
+// D2D FDI Interface (Destination)
+- output [71:0] fdi_data
+- output fdi_valid
+- input fdi_ready
+
+Behavioral Requirements:
+1. Combinatorial Handshake: The wrapper does not require pipeline delays. `soc_ready` should perfectly reflect `fdi_ready`, and `fdi_valid` should reflect `soc_valid`.
+2. Flit Packing: `fdi_data` is a 72-bit bus constructed as `{header, soc_data}`.
+   - The header is 8 bits: `fdi_data[71:64]`.
+   - Bit 71 MUST be hardcoded to `1'b1` to indicate a valid data flit.
+   - Bits [70:64] contain a 7-bit sequential sequence number (`seq_num`).
+3. Sequence Tracking:
+   - Upon reset (`rst_n` = 0), `seq_num` must be 7'b0000000.
+   - The `seq_num` MUST increment by 1 only when a successfully accepted transfer occurs (when both `soc_valid` and `fdi_ready` are 1 on the rising clock edge).
+   - If `fdi_ready` is 0 (backpressure), the `seq_num` must freeze and not drop the current sequence ID.
+   - `seq_num` wraps around naturally to 0 after reaching 127.
+
+Provide only the Verilog module implementation. Do not include testbenches. Use Verilog-2001.

@@ -1,0 +1,22 @@
+Design a Verilog module named `power_aware_fsm` that detects a non-overlapping '101' sequence from a serial input and increments a counter. The module must include a low-power sleep mode.
+
+Module Interface:
+- input clk
+- input rst_n (active low asynchronous reset)
+- input data_in
+- input low_power_mode
+- output [7:0] match_count
+- output cg_en (Clock Gate Enable for downstream logic)
+
+Behavioral Requirements:
+1. Standard Operation: Implement a Moore or Mealy FSM to search for the non-overlapping sequence '101' on `data_in`. 
+2. When the sequence is successfully completed, increment `match_count` by 1 and return to the IDLE state to search for the next sequence.
+3. Power-Aware Feature (Sleep State): 
+   - If `low_power_mode` is 1, the FSM MUST immediately transition to a `SLEEP` state on the next clock cycle.
+   - While in the `SLEEP` state, `cg_en` must be driven to 0 (to power-gate downstream logic). In all other states, `cg_en` must be 1.
+4. Operand Isolation / Toggle Prevention: 
+   - While `low_power_mode` is active or the FSM is in the `SLEEP` state, you MUST ignore `data_in`. 
+   - `match_count` MUST be strictly frozen at its current value to prevent dynamic power toggling.
+5. When `low_power_mode` returns to 0, the FSM transitions from `SLEEP` to the `IDLE` state.
+
+Provide only the Verilog module implementation. Do not include testbenches. Use Verilog-2001.

@@ -1,0 +1,20 @@
+Design a Verilog module named `secure_reg` that stores a 32-bit secret value.
+
+Module Interface:
+- input clk
+- input rst_n (active low asynchronous reset)
+- input write_en
+- input [31:0] secret_data
+- output [31:0] debug_out
+
+Parameters:
+- SECURE_MODE (default: 1)
+
+Behavioral Requirements:
+1. When `rst_n` is 0, the internal register should be cleared to 0.
+2. On the rising edge of `clk`, if `write_en` is 1, the internal register should capture `secret_data`.
+3. Security Requirement: The output `debug_out` is used for testing but poses a secret leakage vulnerability. 
+   - If `SECURE_MODE` is 1, `debug_out` MUST be permanently driven to 32'b0 to prevent secret leakage.
+   - If `SECURE_MODE` is 0, `debug_out` should output the current value of the internal register.
+
+Provide only the Verilog module implementation. Do not include testbenches.

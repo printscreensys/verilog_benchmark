@@ -1,0 +1,23 @@
+Design a System-on-Chip (SoC) top level named `soc_top` that strictly aligns with UPF (Unified Power Format) methodologies for a multi-power-domain design.
+
+Module Interface:
+- input clk
+- input rst_n (active low)
+- input sleep_req
+- input [31:0] data_in
+- output [31:0] data_out
+// UPF Control Hooks (Exported for power intent binding)
+- output pwr_enable
+- output iso_en
+
+Architectural Requirements:
+1. You must create two submodules and instantiate them inside `soc_top`:
+   a. `aon_ctrl` (Always-On Domain Controller)
+   b. `pd_dsp` (Power-Down DSP Domain)
+2. `pd_dsp` must simply register `data_in` to `data_out` on the rising edge of `clk`. Do NOT manually place isolation gates (AND/OR) inside this module; synthesis UPF scripts handle that.
+3. `aon_ctrl` must generate `pwr_enable` and `iso_en` based on `sleep_req`.
+4. UPF Power Sequencing Rule (Critical): 
+   - Normal operation: `iso_en` = 0, `pwr_enable` = 1.
+   - When `sleep_req` goes HIGH (power down sequence): it must assert `iso_en` = 1 for one full clock cycle while `pwr_enable` remains 1. On the NEXT clock cycle, it drops `pwr_enable` to 0.
+   - When `sleep_req` goes LOW (wake up sequence): it must assert `pwr_enable` = 1 for one full clock cycle while `iso_en` remains 1. On the NEXT clock cycle, it drops `iso_en` to 0.
+5. Provide the code for all three modules (`soc_top`, `aon_ctrl`, `pd_dsp`) in a single file. Provide only the Verilog implementation, no testbenches. Use Verilog-2001.

@@ -1,0 +1,26 @@
+Design a Verilog module named `width_upsizer` that converts a 32-bit AXI-Stream-like data interface into a 64-bit data interface.
+
+Module Interface:
+- input clk
+- input rst_n (active low)
+// 32-bit Slave Interface (Input)
+- input [31:0] s_data
+- input s_valid
+- output s_ready
+// 64-bit Master Interface (Output)
+- output [63:0] m_data
+- output m_valid
+- input m_ready
+
+Behavioral Requirements:
+1. The module must accept exactly two 32-bit words from the slave interface to produce one 64-bit word on the master interface.
+2. Data Packing (Little-Endian Alignment):
+   - The FIRST 32-bit word received MUST be packed into the LOWER 32 bits of `m_data` ([31:0]).
+   - The SECOND 32-bit word received MUST be packed into the UPPER 32 bits of `m_data` ([63:32]).
+3. Handshaking & Backpressure:
+   - The module must assert `s_ready` when it is capable of receiving a word.
+   - The module must assert `m_valid` when a full 64-bit word is ready.
+   - If the master is not ready (`m_ready` == 0) when the 64-bit word is formed, the module MUST stall and assert backpressure (`s_ready` = 0) to avoid losing data.
+   - Data is only successfully transferred on an interface when both `valid` and `ready` are 1 on the rising clock edge.
+
+Provide only the Verilog module implementation. Do not include testbenches.
