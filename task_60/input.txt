@@ -1,0 +1,18 @@
+Design a Verilog-2001 module named `reset_sync_2ff` that converts a global asynchronous active-low reset into a local reset with asynchronous assertion and synchronous deassertion.
+
+Module Interface:
+- input clk
+- input arst_n
+- output srst_n
+
+Behavioral Requirements:
+1. `srst_n` is an active-low local reset.
+2. Asynchronous assertion:
+   - If `arst_n` is driven to 0 at any time, `srst_n` must immediately go to 0 without waiting for a clock edge.
+3. Synchronous deassertion:
+   - When `arst_n` returns to 1, `srst_n` must remain 0 for two rising edges of `clk`.
+   - On the second rising edge of `clk` after `arst_n` becomes 1, `srst_n` transitions to 1.
+4. If `arst_n` goes low again while the deassertion sequence is in progress, the sequence must restart from the beginning.
+5. Use synthesizable Verilog-2001 only.
+
+Provide only the Verilog module implementation. Do not include testbenches.

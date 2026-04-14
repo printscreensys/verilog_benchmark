@@ -1,0 +1,95 @@
+{
+    "version": 1,
+    "task_type": "spec_clarification",
+    "answer_preamble": "Append the following benchmark answers to the original prompt before generating RTL.",
+    "max_reasonable_questions": 6,
+    "required_intents": [
+        {
+            "id": "reset_semantics",
+            "title": "Reset semantics",
+            "question_intent": "Ask whether `rst` is active-high or active-low, and whether reset is synchronous or asynchronous.",
+            "answer": "`rst` is an active-low asynchronous reset.",
+            "match_all": [
+                [
+                    "reset",
+                    "rst"
+                ],
+                [
+                    "active low",
+                    "active-low",
+                    "active high",
+                    "active-high",
+                    "polarity",
+                    "asynchronous",
+                    "async",
+                    "synchronous",
+                    "sync"
+                ]
+            ]
+        },
+        {
+            "id": "count_overflow_behavior",
+            "title": "Counter overflow behavior",
+            "question_intent": "Ask whether the 4-bit count wraps or saturates after reaching its maximum value.",
+            "answer": "The 4-bit `count` output saturates at `4'hF`; it must not wrap back to zero.",
+            "match_all": [
+                [
+                    "count",
+                    "counter",
+                    "4'hf",
+                    "max",
+                    "maximum",
+                    "15"
+                ],
+                [
+                    "overflow",
+                    "wrap",
+                    "saturate",
+                    "saturation",
+                    "roll over",
+                    "rollover"
+                ]
+            ]
+        },
+        {
+            "id": "overflow_flag_behavior",
+            "title": "Overflow flag behavior",
+            "question_intent": "Ask whether `overflow` is sticky or pulsed, and when it clears.",
+            "answer": "`overflow` is sticky. It asserts when `event_valid` is high while `count` is already `4'hF`, and it remains high until `clear` or reset.",
+            "match_all": [
+                [
+                    "overflow"
+                ],
+                [
+                    "sticky",
+                    "pulse",
+                    "pulsed",
+                    "latched",
+                    "hold",
+                    "held",
+                    "clear",
+                    "cleared"
+                ]
+            ]
+        },
+        {
+            "id": "clear_priority",
+            "title": "Clear priority",
+            "question_intent": "Ask what happens if `clear` and `event_valid` are asserted in the same cycle.",
+            "answer": "If `clear` and `event_valid` are asserted in the same cycle, `clear` wins. The module clears both `count` and `overflow` in that cycle.",
+            "match_all": [
+                [
+                    "clear"
+                ],
+                [
+                    "event_valid",
+                    "event",
+                    "increment",
+                    "same cycle",
+                    "simultaneous",
+                    "priority"
+                ]
+            ]
+        }
+    ]
+}

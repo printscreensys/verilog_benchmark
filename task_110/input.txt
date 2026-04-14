@@ -1,0 +1,30 @@
+Design a Verilog-2001 module named `consttime_word_compare` that compares two 32-bit words using a fixed-latency constant-time control flow.
+
+Module Interface:
+- input clk
+- input rst_n (active-low asynchronous reset)
+- input start
+- input [31:0] lhs
+- input [31:0] rhs
+- output busy
+- output done
+- output match
+
+Behavioral Requirements:
+1. The module accepts a new request only when `busy` is 0. A request is accepted on the rising edge of `clk` when `start` is 1 and the module is idle.
+2. When a request is accepted, latch `lhs` and `rhs` internally and begin a comparison transaction.
+3. The transaction must take exactly 4 clock cycles after the acceptance edge, regardless of the operand values.
+4. Compare exactly one byte per cycle in this order:
+   - cycle 1: bits `[7:0]`
+   - cycle 2: bits `[15:8]`
+   - cycle 3: bits `[23:16]`
+   - cycle 4: bits `[31:24]`
+5. The implementation must not finish early when a mismatch is discovered. It must still consume all 4 comparison cycles before producing a result.
+6. `busy` must go high immediately after an accepted request and remain high through the cycle where `done` is asserted.
+7. `done` must pulse high for exactly 1 clock cycle on the 4th cycle after request acceptance.
+8. When `done` is high, `match` must be 1 if all four bytes matched, otherwise 0.
+9. When `done` is low, drive `match` low.
+10. While `busy` is high, ignore any new `start` pulses. Do not queue requests.
+11. Reset must immediately clear all internal state and drive `busy=0`, `done=0`, and `match=0`.
+
+Provide only the Verilog module implementation. Do not include testbenches.

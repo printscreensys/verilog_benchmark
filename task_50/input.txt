@@ -1,0 +1,24 @@
+Design a Verilog-2001 module named `scan_reg8` that implements an 8-bit scan-friendly register.
+
+Module Interface:
+- input clk
+- input rst_n (active low asynchronous reset)
+- input scan_en
+- input scan_in
+- input load_en
+- input [7:0] data_in
+- output [7:0] data_out
+- output scan_out
+
+Behavioral Requirements:
+1. When `rst_n` is 0, both `data_out` and `scan_out` must immediately reset to 0.
+2. Functional mode:
+   - When `scan_en` is 0 and `load_en` is 1 on the rising edge of `clk`, capture `data_in` into `data_out`.
+   - When `scan_en` is 0 and `load_en` is 0, retain the current register value.
+3. Scan mode:
+   - When `scan_en` is 1, ignore `load_en` and perform one shift operation on every rising edge of `clk`.
+   - `scan_out` must capture the PREVIOUS `data_out[7]` bit on that clock edge.
+   - `data_out` must update to `{data_out[6:0], scan_in}`.
+4. Returning from scan mode to functional mode must preserve the last shifted value until another functional load occurs.
+
+Provide only the Verilog module implementation. Do not include testbenches.

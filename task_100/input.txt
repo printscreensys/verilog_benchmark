@@ -1,0 +1,34 @@
+Design a Verilog-2001 module named `ecc_guarded_byte`.
+
+Module Interface:
+- input clk
+- input rst_n (active-low asynchronous reset)
+- input write_en
+- input read_en
+- input [7:0] data_in
+- input inject_single_fault
+- input inject_double_fault
+- output reg [7:0] data_out
+- output reg data_valid
+- output reg correctable_error
+- output reg uncorrectable_error
+- output reg fault_sticky
+
+Behavioral Requirements:
+1. Implement a single protected 8-bit storage element using SECDED-style ECC behavior:
+   - no injected fault: return the stored byte,
+   - single-bit fault: correct the data and report `correctable_error`,
+   - double-bit fault: detect it, report `uncorrectable_error`, and drive a safe output value.
+2. `write_en` stores `data_in` together with its protection bits.
+3. `read_en` produces a one-cycle read response on the next rising clock edge:
+   - `data_valid` must pulse high for exactly one cycle,
+   - `correctable_error` and `uncorrectable_error` must also be one-cycle pulses.
+4. When no read response is being produced, drive `data_out` to `8'h00` and keep all pulse outputs low.
+5. `inject_single_fault` and `inject_double_fault` model transient corruption of the protected codeword for that read only. If both are asserted, `inject_double_fault` has priority.
+6. On a single-bit fault, return the original stored byte and assert `correctable_error`.
+7. On a double-bit fault, assert `uncorrectable_error`, return `8'h00`, and do not silently correct the data.
+8. `fault_sticky` must latch high after any detected fault and remain high until reset.
+9. If `write_en` and `read_en` are asserted in the same cycle, the write must take priority and no read response may be produced in that cycle.
+10. Reset must clear the stored state and all outputs.
+
+Provide only the Verilog module implementation. Do not include testbenches.

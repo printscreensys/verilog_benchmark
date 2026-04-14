@@ -1,0 +1,31 @@
+Design a Verilog module named `dual_mac_timing`.
+
+Module Interface:
+- input `clk`
+- input `rst_n` (active-low asynchronous reset)
+- input `in_valid`
+- input signed `[15:0] a`
+- input signed `[15:0] b`
+- input signed `[15:0] c`
+- input signed `[15:0] d`
+- output `out_valid`
+- output signed `[32:0] y`
+
+Behavioral Requirements:
+1. When `in_valid` is high, accept one input tuple `(a, b, c, d)`.
+2. For each accepted tuple, compute the signed result `(a * b) + (c * d)`.
+3. Assert `out_valid` exactly 1 cycle after the corresponding input was accepted.
+4. On the cycle where `out_valid` is high, drive `y` with the matching result.
+5. Support back-to-back accepted inputs. A new tuple may arrive every cycle.
+6. When `out_valid` is low, hold the previous value of `y`.
+7. On reset, clear all internal state and deassert `out_valid`.
+
+Timing / Area Constraints:
+- The benchmark uses a simple timing surrogate.
+- A 16x16 multiply costs 4 delay units.
+- An add or subtract costs 2 delay units.
+- A compare, mux, shift, bitwise operator, unary operator, or concatenation costs 1 delay unit.
+- Every sequential stage must stay within a 4-unit combinational budget.
+- Use at most 100 bits of sequential state, including any valid-pipeline flags.
+
+Provide only the Verilog module implementation. Do not include testbenches.

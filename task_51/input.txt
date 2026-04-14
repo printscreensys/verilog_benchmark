@@ -1,0 +1,28 @@
+Design a Verilog-2001 module named `scan_reset_override_reg` that models a small scan register with a DFT reset override.
+
+Module Interface:
+- input clk
+- input rst_n (active low asynchronous reset)
+- input test_mode
+- input scan_en
+- input scan_in
+- input load_en
+- input [3:0] data_in
+- output [3:0] data_out
+- output scan_out
+
+Behavioral Requirements:
+1. Functional reset behavior:
+   - When `test_mode` is 0, asserting `rst_n` = 0 must asynchronously clear both `data_out` and `scan_out` to 0.
+2. Functional mode:
+   - When `test_mode` is 0 and `load_en` is 1 on the rising edge of `clk`, capture `data_in` into `data_out`.
+   - When `test_mode` is 0 and `load_en` is 0, retain the current value.
+3. Test-mode reset override:
+   - When `test_mode` is 1, asserting `rst_n` = 0 MUST NOT clear the scan register. This models the common DFT requirement that reset be masked during scan shift.
+4. Scan behavior:
+   - Only in `test_mode` with `scan_en` = 1, perform one shift on each rising edge of `clk`.
+   - `scan_out` must capture the PREVIOUS `data_out[3]` bit.
+   - `data_out` must update to `{data_out[2:0], scan_in}`.
+5. In `test_mode` with `scan_en` = 0, hold the current register contents.
+
+Provide only the Verilog module implementation. Do not include testbenches.

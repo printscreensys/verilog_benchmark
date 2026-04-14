@@ -1,0 +1,34 @@
+Design a Verilog-2001 module named `mbist_ram_wrapper` that adds MBIST hooks to a tiny 4-word RAM.
+
+Module Interface:
+- input clk
+- input rst_n (active low asynchronous reset)
+- input func_we
+- input [1:0] func_addr
+- input [7:0] func_wdata
+- output [7:0] func_rdata
+- input mbist_en
+- input mbist_start
+- output mbist_busy
+- output mbist_done
+- output mbist_fail
+
+Behavioral Requirements:
+1. The module contains a 4-entry by 8-bit internal memory.
+2. Functional mode (`mbist_en` = 0):
+   - On each rising edge of `clk`, if `func_we` is 1, write `func_wdata` into `mem[func_addr]`.
+   - `func_rdata` must continuously reflect the current contents of `mem[func_addr]`.
+   - `mbist_busy`, `mbist_done`, and `mbist_fail` must all be 0.
+3. MBIST mode (`mbist_en` = 1):
+   - Functional writes MUST be ignored while MBIST owns the memory.
+   - When `mbist_start` is pulsed HIGH while MBIST is idle, launch an 8-cycle deterministic self-test.
+4. MBIST algorithm:
+   - Cycles 0-3: write pattern `8'hA0 | address` into addresses 0, 1, 2, 3 respectively.
+   - Cycles 4-7: read back addresses 0, 1, 2, 3 respectively and compare against the same expected pattern.
+   - If any compare fails, set `mbist_fail` to 1.
+   - `mbist_busy` must remain 1 for the entire active MBIST run.
+   - `mbist_done` must pulse HIGH for exactly one clock cycle when the 8-cycle MBIST sequence completes.
+5. Reset behavior:
+   - Asserting `rst_n` = 0 must clear the memory contents, clear the MBIST state, and drive `mbist_busy`, `mbist_done`, and `mbist_fail` low.
+
+Provide only the Verilog module implementation. Do not include testbenches.

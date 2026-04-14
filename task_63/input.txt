@@ -1,0 +1,25 @@
+Design a Verilog-2001 module named `delayed_reset_release` that generates a local reset with synchronous deassertion and a programmable post-reset hold time.
+
+Module Interface:
+- input clk
+- input arst_n
+- input [1:0] release_delay
+- output srst_n
+- output init_pulse
+
+Behavioral Requirements:
+1. `srst_n` is an active-low local reset.
+2. Asynchronous assertion:
+   - If `arst_n` is 0, immediately force `srst_n` to 0.
+3. Base synchronization:
+   - After `arst_n` returns to 1, first perform a standard 2-flop synchronous deassertion sequence.
+4. Programmable extra hold:
+   - Once the 2-flop synchronizer indicates reset can be released, keep `srst_n` low for `release_delay` additional rising edges of `clk`.
+   - `release_delay` values 0, 1, 2, and 3 must be supported.
+5. `init_pulse`:
+   - Must be 1 for exactly one rising edge of `clk` when `srst_n` transitions from 0 to 1.
+   - Must be 0 at all other times.
+6. If `arst_n` is asserted low again during the release sequence, restart the entire sequence and clear `init_pulse`.
+7. Use synthesizable Verilog-2001 only.
+
+Provide only the Verilog module implementation. Do not include testbenches.

@@ -1,0 +1,37 @@
+Design a Verilog-2001 module named `apb_lock_cfg` that implements an APB configuration block from the structured register table below.
+
+Module Interface:
+- input clk
+- input rst_n (active low asynchronous reset)
+- input psel
+- input penable
+- input pwrite
+- input [7:0] paddr
+- input [31:0] pwdata
+- input [3:0] pstrb
+- output [31:0] prdata
+- output pready
+- input hw_fault_evt
+- output [1:0] mode
+- output [7:0] limit
+- output cfg_locked
+- output fault_sticky
+- output apply_pulse
+
+Structured Register Table (CSV):
+```text
+offset,name,field,bits,access,reset,notes
+0x00,CFG,mode,[1:0],RW,0x1,writes honor pstrb byte enables
+0x00,CFG,limit,[15:8],RW,0x20,reserved bits read as 0
+0x04,LOCK,cfg_locked,[0],RW1,0x0,once written to 1 it cannot be cleared until reset
+0x08,STATUS,fault_sticky,[0],W1C,0x0,set by hw_fault_evt
+0x0C,CMD,apply,[0],W1P,0x0,write 1 generates one-cycle apply_pulse
+```
+
+Behavioral Requirements:
+1. `CFG` writes must be ignored while `cfg_locked` is 1.
+2. `LOCK` is sticky until reset. Writing 0 must not clear it.
+3. `apply_pulse` must be exactly one cycle wide.
+4. `fault_sticky` must be set by `hw_fault_evt` and only cleared by writing 1 to `STATUS[0]`.
+
+Provide only the Verilog module implementation. Do not include testbenches.

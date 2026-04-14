@@ -1,0 +1,58 @@
+Design a Verilog-2001 module named `apb_timer_csr` that implements a small APB register block from the structured register map below.
+
+Module Interface:
+- input clk
+- input rst_n (active low asynchronous reset)
+- input psel
+- input penable
+- input pwrite
+- input [7:0] paddr
+- input [31:0] pwdata
+- input [3:0] pstrb
+- output [31:0] prdata
+- output pready
+- input [7:0] hw_status
+- input timer_done_evt
+- output timer_enable
+- output [7:0] threshold
+- output clear_done_pulse
+- output irq_pending
+
+Structured Register Map (YAML):
+```yaml
+bus: APB
+registers:
+  - name: CTRL
+    offset: 0x00
+    reset: 0x00001000
+    fields:
+      - {name: enable,    bits: [0, 0],   access: RW}
+      - {name: threshold, bits: [15, 8],  access: RW}
+    notes:
+      - writes must honor pstrb byte enables
+      - reserved bits must read as 0 and ignore writes
+
+  - name: STATUS
+    offset: 0x04
+    fields:
+      - {name: hw_status, bits: [7, 0], access: RO, source: hw_status}
+
+  - name: IRQ_STATUS
+    offset: 0x08
+    fields:
+      - {name: done_sticky, bits: [0, 0], access: W1C, set_on: timer_done_evt}
+
+  - name: CMD
+    offset: 0x0C
+    fields:
+      - {name: clear_done, bits: [0, 0], access: W1P, pulse_output: clear_done_pulse}
+```
+
+Behavioral Requirements:
+1. `pready` may be permanently 1.
+2. `timer_enable` and `threshold` must reflect the CTRL register fields.
+3. `irq_pending` must reflect the sticky `done_sticky` bit.
+4. `clear_done_pulse` must assert for exactly one clock cycle when software writes a 1 to `CMD.clear_done`.
+5. Writing 0 to `IRQ_STATUS.done_sticky` must NOT clear it. Only write-one-to-clear is allowed.
+
+Provide only the Verilog module implementation. Do not include testbenches.

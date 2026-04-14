@@ -1,0 +1,9 @@
+{
+    "version": 1,
+    "task_type": "constraint_aware_timing",
+    "top_module": "dual_mac_timing",
+    "clock_period_ns": 4.0,
+    "surrogate_unit_ns": 1.0,
+    "max_comb_depth_units": 4,
+    "max_register_bits": 100
+}

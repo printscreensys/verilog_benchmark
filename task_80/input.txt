@@ -1,0 +1,20 @@
+Design a Verilog module named `event_counter_alert`.
+
+Module Interface:
+- input clk
+- input rst
+- input event_valid
+- input clear
+- output [3:0] count
+- output overflow
+
+Behavioral Requirements:
+1. Track accepted events in the 4-bit `count` output.
+2. When `event_valid` is asserted, the counter updates.
+3. `clear` clears the module state.
+4. If the counter overflows, assert `overflow`.
+5. Keep the design synthesizable.
+
+This specification is intentionally incomplete. Before generating RTL, ask clarifying questions for any missing behavior that would affect a unique implementation.
+
+Provide only the Verilog module implementation. Do not include testbenches.

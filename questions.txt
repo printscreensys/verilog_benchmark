@@ -1,0 +1,4 @@
+1. Is `rst` active-low or active-high, and is it synchronous or asynchronous?
+2. Does the 4-bit counter wrap or saturate after it reaches 15?
+3. Is `overflow` a sticky flag or a pulse, and how does it clear?
+4. If `clear` and `event_valid` are asserted in the same cycle, which one has priority?

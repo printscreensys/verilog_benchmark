@@ -1,0 +1,40 @@
+Coverage-driven verification task: close functional coverage for the protected
+`queue_credit_tracker` DUT.
+
+Rules:
+- You may edit only `tests/test_sequences.py`.
+- Do not modify the DUT, the coverage model, or the cocotb harness.
+- Do not call coverage APIs directly from the editable file. Coverage must come
+  from observed DUT behavior through the provided helpers.
+
+Goal:
+- Reach at least 90% functional coverage within 6 iterations.
+- Each iteration replays the same tests twice. Flaky or nondeterministic tests
+  are penalized.
+
+Suggested workflow:
+1. Prepare a workspace:
+   `python3 cdv_benchmark/runner.py prepare task_01_queue_credit <workspace>`
+2. Edit `<workspace>/tests/test_sequences.py`
+3. Run one iteration:
+   `python3 cdv_benchmark/runner.py run <workspace>`
+4. Inspect `<workspace>/.cdv/reports/iteration_XX/report.json`
+5. Repeat until the coverage target is met or the budget is exhausted.
+
+DUT summary:
+- `cfg_limit` sets the queue depth limit as `cfg_limit + 1`, so the legal
+  capacities are 1..4 entries.
+- `push` without `pop` increments occupancy unless the queue is already full,
+  in which case `overflow_pulse` asserts for one cycle and `count` does not
+  change.
+- `pop` without `push` decrements occupancy unless the queue is empty, in which
+  case `underflow_pulse` asserts for one cycle and `count` does not change.
+- `flush` clears occupancy to zero and has priority over all other operations.
+- When `push` and `pop` are both asserted in the same cycle:
+  - if the queue is empty, push wins and occupancy increments by one
+  - if the queue is full, pop wins and occupancy decrements by one
+  - otherwise occupancy stays unchanged
+
+The baseline sequence file is intentionally weak. Add more directed or
+constrained-random sequences through the provided helper functions to cover the
+missing bins reported after each run.

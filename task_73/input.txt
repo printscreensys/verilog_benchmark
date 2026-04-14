@@ -1,0 +1,54 @@
+Design a Verilog-2001 module named `apb_sample_csr` that implements an APB register block from the structured YAML specification below.
+
+Module Interface:
+- input clk
+- input rst_n (active low asynchronous reset)
+- input psel
+- input penable
+- input pwrite
+- input [7:0] paddr
+- input [31:0] pwdata
+- input [3:0] pstrb
+- output [31:0] prdata
+- output pready
+- input sample_push
+- input [7:0] sample_data
+- output [7:0] threshold
+- output irq_out
+- output ack_pulse
+
+Structured Register Map (YAML):
+```yaml
+bus: APB
+registers:
+  - name: CONFIG
+    offset: 0x00
+    fields:
+      - {name: threshold, bits: [7, 0], access: RW, reset: 0x20}
+
+  - name: STATUS
+    offset: 0x04
+    fields:
+      - {name: data_pending, bits: [0, 0], access: RO, source: internal}
+
+  - name: DATA
+    offset: 0x08
+    fields:
+      - {name: sample_data, bits: [7, 0], access: RO, source: latched_sample}
+    read_side_effect:
+      - clear: data_pending
+
+  - name: CMD
+    offset: 0x0C
+    fields:
+      - {name: ack, bits: [0, 0], access: W1P, pulse_output: ack_pulse}
+```
+
+Behavioral Requirements:
+1. When `sample_push` pulses high, latch `sample_data` and set `data_pending`.
+2. `irq_out` must reflect `data_pending`.
+3. Reading `STATUS` must NOT clear `data_pending`.
+4. Reading `DATA` must return the latched sample and clear `data_pending`.
+5. `ack_pulse` must be exactly one cycle wide on a write of 1 to `CMD[0]`.
+
+Provide only the Verilog module implementation. Do not include testbenches.

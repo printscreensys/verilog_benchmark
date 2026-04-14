@@ -1,0 +1,43 @@
+Design a Verilog-2001 module named `jtag_tap_debug` that implements a minimal JTAG TAP controller driving internal debug registers.
+
+Module Interface:
+- input tck
+- input trst_n (active low asynchronous reset)
+- input tms
+- input tdi
+- output tdo
+- input [7:0] dbg_status
+- output [7:0] dbg_control
+
+Behavioral Requirements:
+1. Implement this minimal TAP state subset:
+   - `TEST_LOGIC_RESET`
+   - `RUN_TEST_IDLE`
+   - `SELECT_DR_SCAN`
+   - `CAPTURE_DR`
+   - `SHIFT_DR`
+   - `UPDATE_DR`
+   - `SELECT_IR_SCAN`
+   - `CAPTURE_IR`
+   - `SHIFT_IR`
+   - `UPDATE_IR`
+   Pause states are not required.
+2. Reset behavior:
+   - When `trst_n` is 0, go to `TEST_LOGIC_RESET`.
+   - Reset the current instruction to `IDCODE` (`4'b0001`).
+   - Clear `dbg_control` to `8'h00`.
+   - Drive `tdo` to 0.
+3. Instruction register:
+   - 4-bit instruction register.
+   - In `CAPTURE_IR`, load `4'b0101`.
+   - In `SHIFT_IR`, shift LSB-first: `tdo` must present the current LSB before shift, and the shift register must update so that `tdi` enters the MSB side.
+   - In `UPDATE_IR`, commit the shifted instruction.
+4. Supported instructions:
+   - `IDCODE` (`4'b0001`): in `CAPTURE_DR`, load an 8-bit constant `8'hA5` into the data register.
+   - `DBG_CTL` (`4'b0010`): in `CAPTURE_DR`, load current `dbg_control`; in `UPDATE_DR`, commit the shifted 8-bit value into `dbg_control`.
+   - `DBG_STAT` (`4'b0011`): in `CAPTURE_DR`, load `dbg_status`; `UPDATE_DR` must NOT modify any state.
+   - Any other instruction may load `8'h00` into the data register and must not modify state on update.
+5. In `SHIFT_DR`, shift the 8-bit data register LSB-first with the same convention as `SHIFT_IR`.
+6. Outside `SHIFT_IR` and `SHIFT_DR`, drive `tdo` to 0.
+
+Provide only the Verilog module implementation. Do not include testbenches.

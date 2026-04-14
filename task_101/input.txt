@@ -1,0 +1,34 @@
+Design a Verilog-2001 module named `lockstep_event_counter`.
+
+Module Interface:
+- input clk
+- input rst_n (active-low asynchronous reset)
+- input load
+- input step
+- input [3:0] load_value
+- input inject_shadow_fault
+- output [3:0] count
+- output count_valid
+- output reg fault_flag
+- output halted
+
+Behavioral Requirements:
+1. Implement two internal 4-bit counters, `primary` and `shadow`, that normally execute in lockstep.
+2. While no fault is latched:
+   - if `load` is high, both counters load `load_value`,
+   - else if `step` is high, both counters increment by 1 modulo 16,
+   - else both counters hold their state.
+3. `load` has priority over `step`.
+4. `inject_shadow_fault` is a deterministic fault-injection input:
+   - in that cycle only, corrupt the shadow counter result by toggling bit 0 after the normal state update has been computed.
+5. Compare the updated primary and shadow counter values every cycle.
+6. If a mismatch is detected, assert `fault_flag` within that cycle and keep it sticky until reset.
+7. Once `fault_flag` is asserted:
+   - freeze the internal counters,
+   - force `count` to `4'h0`,
+   - force `count_valid` low,
+   - assert `halted`.
+8. While fault-free and not in reset, `count` must reflect the primary counter and `count_valid` must be high.
+9. During reset, clear both counters and all fault state. `count` must be `4'h0`, `count_valid` low, and `halted` low during reset.
+
+Provide only the Verilog module implementation. Do not include testbenches.

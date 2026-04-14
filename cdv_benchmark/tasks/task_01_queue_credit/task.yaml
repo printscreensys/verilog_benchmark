@@ -1,0 +1,28 @@
+id: task_01_queue_credit
+title: Queue Credit Tracker Coverage Closure
+coverage_root: cdv
+iteration_budget: 6
+stability_runs: 2
+timeout_sec: 25
+goal:
+  coverage_percent: 90.0
+scoring:
+  flaky_penalty: 15.0
+editable_paths:
+  - tests/test_sequences.py
+protected_paths:
+  - input.txt
+  - task.yaml
+  - Makefile
+  - rtl/queue_credit_tracker.v
+  - tests/__init__.py
+  - tests/coverage_model.py
+  - tests/test_cdv.py
+  - tests/test_support.py
+forbidden_text:
+  - cocotb_coverage
+  - coverage_db
+  - coverage_model
+  - export_coverage
+  - sample_event
+  - _sample_transition

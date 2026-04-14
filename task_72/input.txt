@@ -1,0 +1,70 @@
+Design a Verilog-2001 module named `axil_sensor_csr` that implements an AXI4-Lite register block from the structured JSON specification below.
+
+Module Interface:
+- input clk
+- input rst_n (active low asynchronous reset)
+- input [7:0] awaddr
+- input awvalid
+- output awready
+- input [31:0] wdata
+- input [3:0] wstrb
+- input wvalid
+- output wready
+- output [1:0] bresp
+- output bvalid
+- input bready
+- input [7:0] araddr
+- input arvalid
+- output arready
+- output [31:0] rdata
+- output [1:0] rresp
+- output rvalid
+- input rready
+- input [7:0] hw_level
+- input irq_evt
+- output block_enable
+- output [7:0] gain
+- output kick_pulse
+- output irq_sticky
+
+Structured Register Map (JSON):
+```json
+{
+  "bus": "AXI4-Lite",
+  "registers": [
+    {
+      "name": "CTRL",
+      "offset": "0x00",
+      "fields": [
+        {"name": "block_enable", "bits": [0, 0], "access": "RW", "reset": 0},
+        {"name": "gain", "bits": [15, 8], "access": "RW", "reset": 8}
+      ],
+      "notes": ["writes must honor wstrb byte enables", "reserved bits read as zero"]
+    },
+    {
+      "name": "STATUS",
+      "offset": "0x04",
+      "fields": [
+        {"name": "irq_sticky", "bits": [0, 0], "access": "W1C", "set_on": "irq_evt"},
+        {"name": "hw_level", "bits": [15, 8], "access": "RO", "source": "hw_level"}
+      ]
+    },
+    {
+      "name": "CMD",
+      "offset": "0x08",
+      "fields": [
+        {"name": "kick", "bits": [0, 0], "access": "W1P", "pulse_output": "kick_pulse"}
+      ]
+    }
+  ]
+}
+```
+
+Behavioral Requirements:
+1. The block only needs to support one write response and one read response at a time.
+2. You may assume the environment presents `awvalid` and `wvalid` together for writes.
+3. `bresp` and `rresp` should return `2'b00`.
+4. `kick_pulse` must be exactly one cycle wide.
+5. `irq_sticky` must be set by `irq_evt` and cleared only by writing 1 to `STATUS[0]`.
+
+Provide only the Verilog module implementation. Do not include testbenches.

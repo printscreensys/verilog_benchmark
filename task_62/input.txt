@@ -1,0 +1,28 @@
+Design a Verilog-2001 module named `triple_reset_sequencer` that releases reset across three asynchronous clock domains in a strict order.
+
+Module Interface:
+- input clk_cpu
+- input clk_bus
+- input clk_periph
+- input arst_n
+- output rst_cpu_n
+- output rst_bus_n
+- output rst_periph_n
+
+Behavioral Requirements:
+1. All outputs are active-low local resets.
+2. `rst_cpu_n`:
+   - Asserts immediately when `arst_n` is 0.
+   - Deasserts synchronously to `clk_cpu` using a 2-flop synchronizer.
+3. `rst_bus_n`:
+   - Must remain 0 until the CPU domain is out of reset.
+   - Synchronize the CPU-ready condition into `clk_bus` with a 2-flop synchronizer.
+   - Deassert `rst_bus_n` only when the synchronized CPU-ready condition reaches the second stage.
+4. `rst_periph_n`:
+   - Must remain 0 until the bus domain is out of reset.
+   - Synchronize the BUS-ready condition into `clk_periph` with a 2-flop synchronizer.
+   - Deassert `rst_periph_n` only when the synchronized BUS-ready condition reaches the second stage.
+5. If `arst_n` is asserted low again at any time, all three local resets must assert immediately and all synchronizers must clear.
+6. Use synthesizable Verilog-2001 only.
+
+Provide only the Verilog module implementation. Do not include testbenches.

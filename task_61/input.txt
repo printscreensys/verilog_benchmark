@@ -1,0 +1,25 @@
+Design a Verilog-2001 module named `ordered_reset_ctrl` that generates domain-local resets for two asynchronous clock domains.
+
+Module Interface:
+- input clk_a
+- input clk_b
+- input arst_n
+- input a_init_done
+- output rst_a_n
+- output rst_b_n
+
+Behavioral Requirements:
+1. Both outputs are active-low local resets.
+2. `rst_a_n`:
+   - Asserts immediately when `arst_n` is 0.
+   - Deasserts synchronously to `clk_a` using a 2-flop reset synchronizer.
+3. `a_init_done` belongs to clock domain A.
+4. Domain B release ordering:
+   - Domain B must remain in reset until domain A is out of reset AND `a_init_done` is 1.
+   - Create an A-domain ready condition from `rst_a_n` and `a_init_done`.
+   - Synchronize that ready condition into `clk_b` using a 2-flop synchronizer.
+   - `rst_b_n` must deassert only when the synchronized ready condition reaches the second synchronizer stage.
+5. If `arst_n` goes low again at any time, both local resets must assert immediately and the synchronizer state must clear.
+6. Use synthesizable Verilog-2001 only.
+
+Provide only the Verilog module implementation. Do not include testbenches.
