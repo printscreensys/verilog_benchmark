@@ -8,7 +8,7 @@ existing single-shot RTL tasks.
 1. Prepare a writable workspace from a task template:
 
 ```bash
-python3 cdv_benchmark/runner.py prepare task_01_queue_credit tmp/cdv_queue_credit
+python3 domains/12_cdv/runner.py prepare task_121 tmp/cdv_queue_credit
 ```
 
 2. Edit only the task's allowed file:
@@ -20,7 +20,7 @@ tmp/cdv_queue_credit/tests/test_sequences.py
 3. Run one coverage-closure iteration:
 
 ```bash
-python3 cdv_benchmark/runner.py run tmp/cdv_queue_credit
+python3 domains/12_cdv/runner.py run tmp/cdv_queue_credit
 ```
 
 4. Inspect the generated report:
@@ -32,7 +32,7 @@ tmp/cdv_queue_credit/.cdv/reports/iteration_01/report.json
 5. Check remaining budget:
 
 ```bash
-python3 cdv_benchmark/runner.py status tmp/cdv_queue_credit
+python3 domains/12_cdv/runner.py status tmp/cdv_queue_credit
 ```
 
 ## Runner Behavior
@@ -51,7 +51,7 @@ python3 cdv_benchmark/runner.py status tmp/cdv_queue_credit
 
 ## Sample Task
 
-`task_01_queue_credit` provides:
+`task_121` provides:
 
 - A protected Verilog DUT with corner-case behavior.
 - A protected cocotb harness and `cocotb-coverage` model.

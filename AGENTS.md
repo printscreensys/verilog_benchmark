@@ -384,7 +384,7 @@ DeepCircuitX provides PPA metrics but doesn't test generation of power-specific 
 ### 5. Hierarchical Chiplet/2.5D Design Tasks
 Tasks require generating hierarchical RTL for chiplet-based designs (multiple dies/interconnects). Tests ability to reason about die-to-die interfaces, UCIe/BoW protocols, and power domain crossing
 
-There are tasks in directories `task_NM` - where `N` stands for domain number.
+There are tasks in directories `domains/<domain_name>/task_NM` - where `N` stands for the problem-domain group number and `M` is the task number inside that domain.
 Each task contains 4 files:
 * `input.txt` - Natural language specification for LLM to generate RTL.
 * `ref.v` - golden Verilog reference code

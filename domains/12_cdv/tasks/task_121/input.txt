@@ -14,10 +14,10 @@ Goal:
 
 Suggested workflow:
 1. Prepare a workspace:
-   `python3 cdv_benchmark/runner.py prepare task_01_queue_credit <workspace>`
+   `python3 domains/12_cdv/runner.py prepare task_121 <workspace>`
 2. Edit `<workspace>/tests/test_sequences.py`
 3. Run one iteration:
-   `python3 cdv_benchmark/runner.py run <workspace>`
+   `python3 domains/12_cdv/runner.py run <workspace>`
 4. Inspect `<workspace>/.cdv/reports/iteration_XX/report.json`
 5. Repeat until the coverage target is met or the budget is exhausted.
 

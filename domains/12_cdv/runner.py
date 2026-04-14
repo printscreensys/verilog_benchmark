@@ -394,7 +394,7 @@ def prepare_workspace(task_name: str, workspace: Path, force: bool) -> int:
 
     print(f"Prepared {config['id']} at {workspace}")
     print(f"Editable files: {', '.join(config['editable_paths'])}")
-    print(f"Run with: python3 cdv_benchmark/runner.py run {workspace}")
+    print(f"Run with: python3 domains/12_cdv/runner.py run {workspace}")
     return 0
 
 
@@ -477,7 +477,10 @@ def build_parser() -> argparse.ArgumentParser:
     list_parser.set_defaults(handler=lambda args: list_tasks())
 
     prepare_parser = subparsers.add_parser("prepare", help="Copy a task template into a workspace.")
-    prepare_parser.add_argument("task_name", help="Task directory name under cdv_benchmark/tasks.")
+    prepare_parser.add_argument(
+        "task_name",
+        help="Task directory name under domains/12_cdv/tasks.",
+    )
     prepare_parser.add_argument("workspace", help="Workspace path to create.")
     prepare_parser.add_argument("--force", action="store_true", help="Overwrite an existing workspace.")
     prepare_parser.set_defaults(
