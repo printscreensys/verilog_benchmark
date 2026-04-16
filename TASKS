@@ -1,0 +1,52 @@
+task_01 [rtl_generation] (domains/00_security_vulnerability_detection/task_01) - Design a Verilog module named `secure_reg` that stores a 32-bit secret value.
+task_06 [rtl_generation] (domains/00_security_vulnerability_detection/task_06) - Design a Verilog module named `shared_reg` that acts as a shared 32-bit register for two different agents (Agent A and Agent B).
+task_11 [rtl_generation] (domains/01_ip_integration/task_11) - Design a Verilog module named `axi2apb_write_bridge` that converts an AXI4-Lite Write transaction into an APB4 Write transaction.
+task_12 [rtl_generation] (domains/01_ip_integration/task_12) - Design a Verilog module named `width_upsizer` that converts a 32-bit AXI-Stream-like data interface into a 64-bit data interface.
+task_24 [rtl_generation] (domains/02_clock_domain_crossing/task_24) - Design a Verilog module named `cdc_bus_sync` that safely transfers a 16-bit data bus from a source clock domain (`clk_a`) to an asynchronous destination clock domain (`clk_b`) using a MUX-based synchronizer.
+task_34 [rtl_generation] (domains/03_low_power_design/task_34) - Design a System-on-Chip (SoC) top level named `soc_top` that strictly aligns with UPF (Unified Power Format) methodologies for a multi-power-domain design.
+task_40 [rtl_generation] (domains/03_low_power_design/task_40) - Design a Verilog module named `power_aware_fsm` that detects a non-overlapping '101' sequence from a serial input and increments a counter. The module must include a low-power sleep mode.
+task_41 [rtl_generation] (domains/04_chiplet_die_to_die_integration/task_41) - Design a Verilog module named `ucie_flit_packager` that acts as a Die-to-Die (D2D) wrapper in Streaming Mode. It packetizes 64-bit SoC data into 72-bit flits for a chiplet interconnect.
+task_50 [rtl_generation] (domains/05_dft_testability/task_50) - Design a Verilog-2001 module named `scan_reg8` that implements an 8-bit scan-friendly register.
+task_51 [rtl_generation] (domains/05_dft_testability/task_51) - Design a Verilog-2001 module named `scan_reset_override_reg` that models a small scan register with a DFT reset override.
+task_52 [rtl_generation] (domains/05_dft_testability/task_52) - Design a Verilog-2001 module named `jtag_tap_debug` that implements a minimal JTAG TAP controller driving internal debug registers.
+task_53 [rtl_generation] (domains/05_dft_testability/task_53) - Design a Verilog-2001 module named `mbist_ram_wrapper` that adds MBIST hooks to a tiny 4-word RAM.
+task_60 [rtl_generation] (domains/06_reset_domain_crossing/task_60) - Design a Verilog-2001 module named `reset_sync_2ff` that converts a global asynchronous active-low reset into a local reset with asynchronous assertion and synchronous deassertion.
+task_61 [rtl_generation] (domains/06_reset_domain_crossing/task_61) - Design a Verilog-2001 module named `ordered_reset_ctrl` that generates domain-local resets for two asynchronous clock domains.
+task_62 [rtl_generation] (domains/06_reset_domain_crossing/task_62) - Design a Verilog-2001 module named `triple_reset_sequencer` that releases reset across three asynchronous clock domains in a strict order.
+task_63 [rtl_generation] (domains/06_reset_domain_crossing/task_63) - Design a Verilog-2001 module named `delayed_reset_release` that generates a local reset with synchronous deassertion and a programmable post-reset hold time.
+task_70 [rtl_generation] (domains/07_csr_register_map_generation/task_70) - Design a Verilog-2001 module named `apb_timer_csr` that implements a small APB register block from the structured register map below.
+task_71 [rtl_generation] (domains/07_csr_register_map_generation/task_71) - Design a Verilog-2001 module named `apb_lock_cfg` that implements an APB configuration block from the structured register table below.
+task_72 [rtl_generation] (domains/07_csr_register_map_generation/task_72) - Design a Verilog-2001 module named `axil_sensor_csr` that implements an AXI4-Lite register block from the structured JSON specification below.
+task_73 [rtl_generation] (domains/07_csr_register_map_generation/task_73) - Design a Verilog-2001 module named `apb_sample_csr` that implements an APB register block from the structured YAML specification below.
+task_80 [spec_clarification] (domains/08_spec_clarification/task_80) - Design a Verilog module named `event_counter_alert`.
+task_90 [rtl_generation] (domains/09_constraint_aware_timing/task_90) - Design a Verilog module named `dual_mac_timing`.
+task_100 [rtl_generation] (domains/10_fault_tolerant_safety/task_100) - Design a Verilog-2001 module named `ecc_guarded_byte`.
+task_101 [rtl_generation] (domains/10_fault_tolerant_safety/task_101) - Design a Verilog-2001 module named `lockstep_event_counter`.
+task_110 [rtl_generation] (domains/11_side_channel_constant_time/task_110) - Design a Verilog-2001 module named `consttime_word_compare` that compares two 32-bit words using a fixed-latency constant-time control flow.
+task_111 [rtl_generation] (domains/11_side_channel_constant_time/task_111) - Design a Verilog-2001 module named `consttime_byte_search` that searches for a byte value using fixed-latency constant-time control flow.
+task_121 [cdv] (domains/12_cdv/tasks/task_121) - Queue Credit Tracker Coverage Closure
+
+
+
+.venv/bin/python -m benchmark_runner run task_7 --model mistral-medium-latest
+
+.venv/bin/python -m benchmark_runner run task_71  --model mistral-medium-latest;
+sleep 3;
+.venv/bin/python -m benchmark_runner run task_72  --model mistral-medium-latest;
+sleep 3;
+.venv/bin/python -m benchmark_runner run task_73  --model mistral-medium-latest;
+sleep 3;
+.venv/bin/python -m benchmark_runner run task_80  --model mistral-medium-latest;
+sleep 3;
+.venv/bin/python -m benchmark_runner run task_90  --model mistral-medium-latest;
+sleep 3;
+.venv/bin/python -m benchmark_runner run task_100 --model mistral-medium-latest;
+sleep 3;
+.venv/bin/python -m benchmark_runner run task_101 --model mistral-medium-latest;
+sleep 3;
+.venv/bin/python -m benchmark_runner run task_110 --model mistral-medium-latest;
+sleep 3;
+.venv/bin/python -m benchmark_runner run task_111 --model mistral-medium-latest;
+sleep 3;
+.venv/bin/python -m benchmark_runner run task_121 --model mistral-medium-latest;
+sleep 3;

@@ -1,5 +1,19 @@
 import json
+import os
+from pathlib import Path
 import re
+import shutil
+import subprocess
+import tempfile
+
+from .common import clean_tool_output
+
+
+DEFAULT_OPENSTA_IMAGE = "opensta_ubuntu22.04"
+DEFAULT_YOSYS_CANDIDATES = (
+    "/usr/local/bin/oss-cad-suite/bin/yosys",
+    "/opt/oss-cad-suite/bin/yosys",
+)
 
 
 def _load_timing_spec(timing_spec_file):
@@ -34,12 +48,24 @@ def _load_timing_spec(timing_spec_file):
         if max_register_bits <= 0:
             raise ValueError("max_register_bits must be positive when provided.")
 
+    opensta_input_delay_ns = float(spec.get("opensta_input_delay_ns", 0.0))
+    opensta_output_delay_ns = float(spec.get("opensta_output_delay_ns", 0.0))
+    if opensta_input_delay_ns < 0.0:
+        raise ValueError("opensta_input_delay_ns must be non-negative when provided.")
+    if opensta_output_delay_ns < 0.0:
+        raise ValueError("opensta_output_delay_ns must be non-negative when provided.")
+
     return {
         "top_module": spec["top_module"],
         "clock_period_ns": clock_period_ns,
         "max_comb_depth_units": max_comb_depth_units,
         "surrogate_unit_ns": surrogate_unit_ns,
         "max_register_bits": max_register_bits,
+        "clock_port": spec.get("clock_port", "clk"),
+        "opensta_docker_image": spec.get("opensta_docker_image", DEFAULT_OPENSTA_IMAGE),
+        "opensta_liberty_file": spec.get("opensta_liberty_file"),
+        "opensta_input_delay_ns": opensta_input_delay_ns,
+        "opensta_output_delay_ns": opensta_output_delay_ns,
     }
 
 
@@ -149,6 +175,67 @@ def _extract_header_port_info(module_text):
                 "direction": direction_match.group(1),
                 "width": width,
             }
+
+    return ports
+
+
+def _extract_module_port_names(module_text):
+    module_name_match = re.search(r"\bmodule\s+[$A-Za-z_][$\w]*\s*\(", module_text)
+    if module_name_match is None:
+        return []
+
+    header_start = module_name_match.end() - 1
+    cursor = header_start
+    paren_depth = 0
+
+    while cursor < len(module_text):
+        char = module_text[cursor]
+        if char == "(":
+            paren_depth += 1
+        elif char == ")":
+            paren_depth -= 1
+            if paren_depth == 0:
+                break
+        cursor += 1
+
+    if paren_depth != 0:
+        return []
+
+    port_blob = module_text[header_start + 1:cursor]
+    port_names = []
+    for segment in _split_top_level(port_blob, ","):
+        port_name = _base_signal_name(segment)
+        if port_name:
+            port_names.append(port_name)
+    return port_names
+
+
+def _extract_body_port_info(module_text, module_port_names):
+    port_name_set = set(module_port_names)
+    if not port_name_set:
+        return {}
+
+    ports = {}
+    header_end = module_text.find(");")
+    body_text = module_text[header_end + 2:] if header_end != -1 else module_text
+    declaration_pattern = re.compile(
+        r"\b(input|output|inout)\b\s*(?:reg|wire|logic\s*)?(?:signed\s*)?"
+        r"(?:\[(\d+)\s*:\s*(\d+)\])?\s*([^;]+);",
+        re.S,
+    )
+
+    for direction, msb_text, lsb_text, names_blob in declaration_pattern.findall(body_text):
+        width = 1
+        if msb_text and lsb_text:
+            width = abs(int(msb_text) - int(lsb_text)) + 1
+
+        for raw_name in _split_top_level(names_blob, ","):
+            name = _base_signal_name(raw_name)
+            if name and name in port_name_set:
+                ports[name] = {
+                    "direction": direction,
+                    "width": width,
+                }
 
     return ports
 
@@ -552,6 +639,503 @@ def _estimate_expression_depth(expression_text, signal_depth_resolver):
     return parser.parse()
 
 
+def _build_base_timing_metrics():
+    return {
+        "timing_check_ran": False,
+        "timing_constraints_met": None,
+        "timing_message": "",
+        "timing_analysis_method": "",
+        "clock_period_ns": None,
+        "estimated_critical_path_units": None,
+        "estimated_critical_path_ns": None,
+        "timing_slack_ns": None,
+        "max_comb_depth_units": None,
+        "register_bits": None,
+        "max_register_bits": None,
+        "area_constraints_met": None,
+        "constraint_score": None,
+        "opensta_image": None,
+        "opensta_image_available": None,
+        "opensta_message": "",
+    }
+
+
+def _analyze_verilog_structure(verilog_file, timing_spec):
+    with open(verilog_file, "r", encoding="utf-8") as handle:
+        verilog_text = handle.read()
+
+    module_text = _extract_module_source(
+        _strip_verilog_comments(verilog_text),
+        timing_spec["top_module"],
+    )
+    module_port_names = _extract_module_port_names(module_text)
+    header_ports = _extract_header_port_info(module_text)
+    body_ports = _extract_body_port_info(module_text, module_port_names)
+    ports = dict(header_ports)
+    ports.update(body_ports)
+    body_widths = _extract_body_declared_widths(module_text)
+    signal_widths = {
+        name: port_info["width"]
+        for name, port_info in ports.items()
+    }
+    signal_widths.update(body_widths)
+
+    continuous_assignments = _collect_continuous_assignments(module_text)
+    sequential_assignments, sequential_regs = _collect_sequential_assignments(module_text)
+    output_ports = {
+        name
+        for name, port_info in ports.items()
+        if port_info["direction"] == "output"
+    }
+
+    register_bits = 0
+    for register_name in sequential_regs:
+        register_bits += int(signal_widths.get(register_name, 1))
+
+    return {
+        "module_text": module_text,
+        "header_ports": ports,
+        "module_port_names": module_port_names,
+        "signal_widths": signal_widths,
+        "continuous_assignments": continuous_assignments,
+        "sequential_assignments": sequential_assignments,
+        "sequential_regs": sequential_regs,
+        "output_ports": output_ports,
+        "register_bits": register_bits,
+    }
+
+
+def _run_surrogate_timing_check(verilog_file, timing_spec_file, timing_spec):
+    result_metrics = _build_base_timing_metrics()
+
+    structure = _analyze_verilog_structure(verilog_file, timing_spec)
+    continuous_assignments = structure["continuous_assignments"]
+    sequential_assignments = structure["sequential_assignments"]
+    sequential_regs = structure["sequential_regs"]
+    output_ports = structure["output_ports"]
+    register_bits = structure["register_bits"]
+
+    depth_cache = {}
+    active_signals = set()
+
+    def resolve_signal_depth(signal_name):
+        if signal_name is None:
+            return 0
+        if signal_name in sequential_regs:
+            return 0
+        if signal_name in depth_cache:
+            return depth_cache[signal_name]
+        if signal_name not in continuous_assignments:
+            return 0
+        if signal_name in active_signals:
+            raise ValueError(f"Combinational loop detected around '{signal_name}'.")
+
+        active_signals.add(signal_name)
+        depth = _estimate_expression_depth(
+            continuous_assignments[signal_name],
+            resolve_signal_depth,
+        )
+        active_signals.remove(signal_name)
+        depth_cache[signal_name] = depth
+        return depth
+
+    critical_path_units = 0
+    path_targets = []
+    for lhs, rhs in sequential_assignments:
+        depth_units = _estimate_expression_depth(rhs, resolve_signal_depth)
+        critical_path_units = max(critical_path_units, depth_units)
+        path_targets.append((lhs, depth_units))
+
+    for output_name in sorted(output_ports):
+        if output_name in sequential_regs or output_name not in continuous_assignments:
+            continue
+        depth_units = resolve_signal_depth(output_name)
+        critical_path_units = max(critical_path_units, depth_units)
+        path_targets.append((output_name, depth_units))
+
+    estimated_critical_path_ns = round(
+        critical_path_units * timing_spec["surrogate_unit_ns"],
+        3,
+    )
+    timing_slack_ns = round(
+        timing_spec["clock_period_ns"] - estimated_critical_path_ns,
+        3,
+    )
+    timing_constraints_met = critical_path_units <= timing_spec["max_comb_depth_units"]
+
+    max_register_bits = timing_spec["max_register_bits"]
+    area_constraints_met = True
+    if max_register_bits is not None:
+        area_constraints_met = register_bits <= max_register_bits
+
+    timing_efficiency = min(
+        1.0,
+        timing_spec["clock_period_ns"] / max(estimated_critical_path_ns, 1e-9),
+    )
+    if max_register_bits is None:
+        area_efficiency = 1.0
+    else:
+        area_efficiency = min(1.0, max_register_bits / max(register_bits, 1))
+
+    collapsed_paths = {}
+    for target, depth_units in path_targets:
+        collapsed_paths[target] = max(depth_units, collapsed_paths.get(target, 0))
+
+    constraint_score = round(
+        max(0.0, min(1.0, (timing_efficiency * 0.7) + (area_efficiency * 0.3))),
+        3,
+    )
+
+    result_metrics.update(
+        {
+            "timing_check_ran": True,
+            "timing_constraints_met": timing_constraints_met and area_constraints_met,
+            "timing_message": "Timing surrogate analysis completed.",
+            "timing_analysis_method": "surrogate_depth_model",
+            "clock_period_ns": timing_spec["clock_period_ns"],
+            "estimated_critical_path_units": critical_path_units,
+            "estimated_critical_path_ns": estimated_critical_path_ns,
+            "timing_slack_ns": timing_slack_ns,
+            "max_comb_depth_units": timing_spec["max_comb_depth_units"],
+            "register_bits": register_bits,
+            "max_register_bits": max_register_bits,
+            "area_constraints_met": area_constraints_met,
+            "constraint_score": constraint_score,
+            "timing_paths": [
+                {
+                    "target": target,
+                    "depth_units": depth_units,
+                }
+                for target, depth_units in sorted(
+                    collapsed_paths.items(),
+                    key=lambda item: item[1],
+                    reverse=True,
+                )
+            ],
+        }
+    )
+
+    return result_metrics
+
+
+def _run_command(command, *, cwd=None, timeout=60):
+    process = subprocess.run(
+        command,
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+    )
+    output = clean_tool_output(process.stdout + process.stderr)
+    return process.returncode, output
+
+
+def _resolve_yosys_binary():
+    configured = os.environ.get("YOSYS_BIN")
+    if configured:
+        candidate = Path(configured)
+        if candidate.exists() and os.access(candidate, os.X_OK):
+            return str(candidate)
+
+    discovered = shutil.which("yosys")
+    if discovered is not None:
+        return discovered
+
+    for candidate_path in DEFAULT_YOSYS_CANDIDATES:
+        candidate = Path(candidate_path)
+        if candidate.exists() and os.access(candidate, os.X_OK):
+            return str(candidate)
+
+    return None
+
+
+def _docker_image_available(image_name):
+    if shutil.which("docker") is None:
+        return False, "Docker is not installed."
+
+    try:
+        returncode, output = _run_command(
+            ["docker", "image", "inspect", image_name],
+            timeout=20,
+        )
+    except Exception as exc:
+        return False, f"Docker image inspection failed: {str(exc)}"
+
+    if returncode == 0:
+        return True, "Docker image is available."
+
+    if output:
+        return False, output
+    return False, f"Docker image '{image_name}' was not found."
+
+
+def _docker_image_has_command(image_name, command_name):
+    try:
+        returncode, output = _run_command(
+            [
+                "docker",
+                "run",
+                "--rm",
+                image_name,
+                "sh",
+                "-lc",
+                f"command -v {command_name}",
+            ],
+            timeout=30,
+        )
+    except Exception as exc:
+        return False, f"Failed to probe '{command_name}' in Docker image: {str(exc)}"
+
+    if returncode == 0:
+        return True, output
+    return False, output or f"Command '{command_name}' was not found in Docker image."
+
+
+def _resolve_opensta_liberty_file(timing_spec, timing_spec_file):
+    configured_liberty = timing_spec.get("opensta_liberty_file")
+    if configured_liberty:
+        candidate = Path(configured_liberty)
+        if not candidate.is_absolute():
+            candidate = Path(timing_spec_file).resolve().parent / candidate
+        return candidate if candidate.exists() else None
+
+    task_dir = Path(timing_spec_file).resolve().parent
+    liberty_candidates = sorted(task_dir.glob("*.lib")) + sorted(task_dir.glob("*.liberty"))
+    if len(liberty_candidates) == 1:
+        return liberty_candidates[0]
+    return None
+
+
+def _extract_opensta_slack(report_text):
+    patterns = [
+        r"(-?\d+(?:\.\d+)?)\s+slack\s+\((?:MET|VIOLATED)\)",
+        r"slack\s+\((?:MET|VIOLATED)\)\s+(-?\d+(?:\.\d+)?)",
+        r"slack\s+(-?\d+(?:\.\d+)?)",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, report_text)
+        if match is not None:
+            return float(match.group(1))
+    return None
+
+
+def _build_yosys_script(top_module_name):
+    return "\n".join(
+        [
+            "read_verilog design.v",
+            f"hierarchy -check -top {top_module_name}",
+            "proc",
+            "opt",
+            "fsm",
+            "opt",
+            "memory",
+            "opt",
+            "techmap",
+            "opt",
+            "dfflibmap -liberty library.lib",
+            "abc -liberty library.lib",
+            "clean",
+            "write_verilog -noattr netlist.v",
+        ]
+    )
+
+
+def _build_opensta_script(timing_spec, file_prefix=""):
+    def prefixed(name):
+        if not file_prefix:
+            return name
+        return f"{file_prefix.rstrip('/')}/{name}"
+
+    lines = [
+        f"read_liberty {prefixed('library.lib')}",
+        f"read_verilog {prefixed('netlist.v')}",
+        f"link_design {timing_spec['top_module']}",
+        (
+            f"create_clock -name bench_clk -period {timing_spec['clock_period_ns']} "
+            f"[get_ports {timing_spec['clock_port']}]"
+        ),
+    ]
+
+    if timing_spec["opensta_input_delay_ns"] > 0.0:
+        lines.append(
+            "set_input_delay "
+            f"{timing_spec['opensta_input_delay_ns']} -clock bench_clk "
+            f"[remove_from_collection [all_inputs] [get_ports {timing_spec['clock_port']}]]"
+        )
+    if timing_spec["opensta_output_delay_ns"] > 0.0:
+        lines.append(
+            f"set_output_delay {timing_spec['opensta_output_delay_ns']} -clock bench_clk [all_outputs]"
+        )
+
+    lines.extend(
+        [
+            "report_checks -path_delay max -digits 4",
+            "exit",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def _run_yosys_synthesis(work_dir, image_name):
+    host_yosys = _resolve_yosys_binary()
+    if host_yosys is not None:
+        return _run_command(
+            [host_yosys, "-q", "-s", "synth.ys"],
+            cwd=work_dir,
+            timeout=120,
+        )
+
+    has_yosys, message = _docker_image_has_command(image_name, "yosys")
+    if not has_yosys:
+        return 1, message
+
+    return _run_command(
+        [
+            "docker",
+            "run",
+            "--rm",
+            "-v",
+            f"{work_dir}:/work",
+            "-w",
+            "/work",
+            image_name,
+            "yosys",
+            "-q",
+            "-s",
+            "synth.ys",
+        ],
+        timeout=240,
+    )
+
+
+def _run_opensta_in_docker(work_dir, image_name):
+    return _run_command(
+        [
+            "docker",
+            "run",
+            "--rm",
+            "-v",
+            f"{work_dir}:/work",
+            image_name,
+            "/work/timing.tcl",
+        ],
+        timeout=240,
+    )
+
+
+def _run_opensta_timing_check(verilog_file, timing_spec_file, timing_spec):
+    result_metrics = _build_base_timing_metrics()
+    result_metrics["opensta_image"] = timing_spec["opensta_docker_image"]
+
+    image_available, image_message = _docker_image_available(timing_spec["opensta_docker_image"])
+    result_metrics["opensta_image_available"] = image_available
+    result_metrics["opensta_message"] = image_message
+    if not image_available:
+        return result_metrics
+
+    liberty_file = _resolve_opensta_liberty_file(timing_spec, timing_spec_file)
+    if liberty_file is None:
+        result_metrics["opensta_message"] = (
+            "OpenSTA image is available, but no Liberty file was provided or discovered."
+        )
+        return result_metrics
+
+    structure = _analyze_verilog_structure(verilog_file, timing_spec)
+    register_bits = structure["register_bits"]
+    header_ports = structure["header_ports"]
+
+    if timing_spec["clock_port"] not in header_ports:
+        result_metrics["opensta_message"] = (
+            f"Clock port '{timing_spec['clock_port']}' was not found in top module "
+            f"'{timing_spec['top_module']}'."
+        )
+        return result_metrics
+
+    max_register_bits = timing_spec["max_register_bits"]
+    area_constraints_met = True
+    if max_register_bits is not None:
+        area_constraints_met = register_bits <= max_register_bits
+
+    with tempfile.TemporaryDirectory(prefix="opensta_eval_") as temp_dir:
+        work_dir = Path(temp_dir)
+        shutil.copyfile(verilog_file, work_dir / "design.v")
+        shutil.copyfile(liberty_file, work_dir / "library.lib")
+        (work_dir / "synth.ys").write_text(
+            _build_yosys_script(timing_spec["top_module"]),
+            encoding="utf-8",
+        )
+        (work_dir / "timing.tcl").write_text(
+            _build_opensta_script(timing_spec, "/work"),
+            encoding="utf-8",
+        )
+
+        synth_returncode, synth_output = _run_yosys_synthesis(
+            str(work_dir),
+            timing_spec["opensta_docker_image"],
+        )
+        if synth_returncode != 0:
+            result_metrics["opensta_message"] = (
+                "OpenSTA image is available, but synthesis for timing failed: "
+                + synth_output
+            )
+            return result_metrics
+
+        sta_returncode, sta_output = _run_opensta_in_docker(
+            str(work_dir),
+            timing_spec["opensta_docker_image"],
+        )
+        if sta_returncode != 0:
+            result_metrics["opensta_message"] = (
+                "OpenSTA execution failed: " + sta_output
+            )
+            return result_metrics
+
+        slack_ns = _extract_opensta_slack(sta_output)
+        if slack_ns is None:
+            result_metrics["opensta_message"] = (
+                "OpenSTA ran, but worst slack could not be parsed from the report."
+            )
+            return result_metrics
+
+        estimated_critical_path_ns = round(
+            timing_spec["clock_period_ns"] - slack_ns,
+            3,
+        )
+        timing_efficiency = min(
+            1.0,
+            timing_spec["clock_period_ns"] / max(estimated_critical_path_ns, 1e-9),
+        )
+        if max_register_bits is None:
+            area_efficiency = 1.0
+        else:
+            area_efficiency = min(1.0, max_register_bits / max(register_bits, 1))
+
+        constraint_score = round(
+            max(0.0, min(1.0, (timing_efficiency * 0.7) + (area_efficiency * 0.3))),
+            3,
+        )
+
+        result_metrics.update(
+            {
+                "timing_check_ran": True,
+                "timing_constraints_met": (slack_ns >= 0.0) and area_constraints_met,
+                "timing_message": "OpenSTA timing analysis completed.",
+                "timing_analysis_method": "opensta_docker",
+                "clock_period_ns": timing_spec["clock_period_ns"],
+                "estimated_critical_path_ns": estimated_critical_path_ns,
+                "timing_slack_ns": round(slack_ns, 3),
+                "max_comb_depth_units": timing_spec["max_comb_depth_units"],
+                "register_bits": register_bits,
+                "max_register_bits": max_register_bits,
+                "area_constraints_met": area_constraints_met,
+                "constraint_score": constraint_score,
+                "opensta_message": sta_output,
+            }
+        )
+
+    return result_metrics
+
+
 def run_optional_timing_check(verilog_file, timing_spec_file):
     result_metrics = {
         "timing_check_ran": False,
@@ -567,6 +1151,9 @@ def run_optional_timing_check(verilog_file, timing_spec_file):
         "max_register_bits": None,
         "area_constraints_met": None,
         "constraint_score": None,
+        "opensta_image": None,
+        "opensta_image_available": None,
+        "opensta_message": "",
     }
 
     if timing_spec_file is None:
@@ -575,132 +1162,28 @@ def run_optional_timing_check(verilog_file, timing_spec_file):
 
     try:
         timing_spec = _load_timing_spec(timing_spec_file)
-        with open(verilog_file, "r", encoding="utf-8") as handle:
-            verilog_text = handle.read()
-
-        module_text = _extract_module_source(
-            _strip_verilog_comments(verilog_text),
-            timing_spec["top_module"],
+        opensta_results = _run_opensta_timing_check(
+            verilog_file,
+            timing_spec_file,
+            timing_spec,
         )
-        header_ports = _extract_header_port_info(module_text)
-        body_widths = _extract_body_declared_widths(module_text)
-        signal_widths = {
-            name: port_info["width"]
-            for name, port_info in header_ports.items()
-        }
-        signal_widths.update(body_widths)
+        if opensta_results["timing_analysis_method"] == "opensta_docker":
+            return opensta_results
 
-        continuous_assignments = _collect_continuous_assignments(module_text)
-        sequential_assignments, sequential_regs = _collect_sequential_assignments(module_text)
-        output_ports = {
-            name
-            for name, port_info in header_ports.items()
-            if port_info["direction"] == "output"
-        }
-
-        depth_cache = {}
-        active_signals = set()
-
-        def resolve_signal_depth(signal_name):
-            if signal_name is None:
-                return 0
-            if signal_name in sequential_regs:
-                return 0
-            if signal_name in depth_cache:
-                return depth_cache[signal_name]
-            if signal_name not in continuous_assignments:
-                return 0
-            if signal_name in active_signals:
-                raise ValueError(f"Combinational loop detected around '{signal_name}'.")
-
-            active_signals.add(signal_name)
-            depth = _estimate_expression_depth(
-                continuous_assignments[signal_name],
-                resolve_signal_depth,
+        surrogate_results = _run_surrogate_timing_check(
+            verilog_file,
+            timing_spec_file,
+            timing_spec,
+        )
+        surrogate_results["opensta_image"] = opensta_results["opensta_image"]
+        surrogate_results["opensta_image_available"] = opensta_results["opensta_image_available"]
+        surrogate_results["opensta_message"] = opensta_results["opensta_message"]
+        if opensta_results["opensta_message"]:
+            surrogate_results["timing_message"] = (
+                opensta_results["opensta_message"]
+                + " Falling back to surrogate timing analysis."
             )
-            active_signals.remove(signal_name)
-            depth_cache[signal_name] = depth
-            return depth
-
-        critical_path_units = 0
-        path_targets = []
-        for lhs, rhs in sequential_assignments:
-            depth_units = _estimate_expression_depth(rhs, resolve_signal_depth)
-            critical_path_units = max(critical_path_units, depth_units)
-            path_targets.append((lhs, depth_units))
-
-        for output_name in sorted(output_ports):
-            if output_name in sequential_regs or output_name not in continuous_assignments:
-                continue
-            depth_units = resolve_signal_depth(output_name)
-            critical_path_units = max(critical_path_units, depth_units)
-            path_targets.append((output_name, depth_units))
-
-        register_bits = 0
-        for register_name in sequential_regs:
-            register_bits += int(signal_widths.get(register_name, 1))
-
-        estimated_critical_path_ns = round(
-            critical_path_units * timing_spec["surrogate_unit_ns"],
-            3,
-        )
-        timing_slack_ns = round(
-            timing_spec["clock_period_ns"] - estimated_critical_path_ns,
-            3,
-        )
-        timing_constraints_met = critical_path_units <= timing_spec["max_comb_depth_units"]
-
-        max_register_bits = timing_spec["max_register_bits"]
-        area_constraints_met = True
-        if max_register_bits is not None:
-            area_constraints_met = register_bits <= max_register_bits
-
-        timing_efficiency = min(
-            1.0,
-            timing_spec["clock_period_ns"] / max(estimated_critical_path_ns, 1e-9),
-        )
-        if max_register_bits is None:
-            area_efficiency = 1.0
-        else:
-            area_efficiency = min(1.0, max_register_bits / max(register_bits, 1))
-
-        collapsed_paths = {}
-        for target, depth_units in path_targets:
-            collapsed_paths[target] = max(depth_units, collapsed_paths.get(target, 0))
-
-        constraint_score = round(
-            max(0.0, min(1.0, (timing_efficiency * 0.7) + (area_efficiency * 0.3))),
-            3,
-        )
-
-        result_metrics.update(
-            {
-                "timing_check_ran": True,
-                "timing_constraints_met": timing_constraints_met and area_constraints_met,
-                "timing_message": "Timing surrogate analysis completed.",
-                "timing_analysis_method": "surrogate_depth_model",
-                "clock_period_ns": timing_spec["clock_period_ns"],
-                "estimated_critical_path_units": critical_path_units,
-                "estimated_critical_path_ns": estimated_critical_path_ns,
-                "timing_slack_ns": timing_slack_ns,
-                "max_comb_depth_units": timing_spec["max_comb_depth_units"],
-                "register_bits": register_bits,
-                "max_register_bits": max_register_bits,
-                "area_constraints_met": area_constraints_met,
-                "constraint_score": constraint_score,
-                "timing_paths": [
-                    {
-                        "target": target,
-                        "depth_units": depth_units,
-                    }
-                    for target, depth_units in sorted(
-                        collapsed_paths.items(),
-                        key=lambda item: item[1],
-                        reverse=True,
-                    )
-                ],
-            }
-        )
+        return surrogate_results
     except Exception as exc:
         result_metrics["timing_check_ran"] = True
         result_metrics["timing_constraints_met"] = False

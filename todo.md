@@ -317,3 +317,6 @@ Each idea includes an implementation algorithm (steps) and suggested tools.
 - `verilator` lint, `yosys` synth checks.
 - Optional: `symbiyosys` for small formal invariants.
 
+dumpvars;
+switch;
+UVM Tests;
