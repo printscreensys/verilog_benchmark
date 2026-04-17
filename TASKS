@@ -25,28 +25,3 @@ task_101 [rtl_generation] (domains/10_fault_tolerant_safety/task_101) - Design a
 task_110 [rtl_generation] (domains/11_side_channel_constant_time/task_110) - Design a Verilog-2001 module named `consttime_word_compare` that compares two 32-bit words using a fixed-latency constant-time control flow.
 task_111 [rtl_generation] (domains/11_side_channel_constant_time/task_111) - Design a Verilog-2001 module named `consttime_byte_search` that searches for a byte value using fixed-latency constant-time control flow.
 task_121 [cdv] (domains/12_cdv/tasks/task_121) - Queue Credit Tracker Coverage Closure
-
-
-
-.venv/bin/python -m benchmark_runner run task_7 --model mistral-medium-latest
-
-.venv/bin/python -m benchmark_runner run task_71  --model mistral-medium-latest;
-sleep 3;
-.venv/bin/python -m benchmark_runner run task_72  --model mistral-medium-latest;
-sleep 3;
-.venv/bin/python -m benchmark_runner run task_73  --model mistral-medium-latest;
-sleep 3;
-.venv/bin/python -m benchmark_runner run task_80  --model mistral-medium-latest;
-sleep 3;
-.venv/bin/python -m benchmark_runner run task_90  --model mistral-medium-latest;
-sleep 3;
-.venv/bin/python -m benchmark_runner run task_100 --model mistral-medium-latest;
-sleep 3;
-.venv/bin/python -m benchmark_runner run task_101 --model mistral-medium-latest;
-sleep 3;
-.venv/bin/python -m benchmark_runner run task_110 --model mistral-medium-latest;
-sleep 3;
-.venv/bin/python -m benchmark_runner run task_111 --model mistral-medium-latest;
-sleep 3;
-.venv/bin/python -m benchmark_runner run task_121 --model mistral-medium-latest;
-sleep 3;
