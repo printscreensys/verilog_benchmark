@@ -1,0 +1,28 @@
+services:
+  opensta:
+    container_name: vb_opensta
+    image: opensta_ubuntu22.04
+    build:
+      context: https://github.com/The-OpenROAD-Project/OpenSTA.git#master
+      dockerfile: Dockerfile.ubuntu22.04
+    entrypoint: ["sleep", "infinity"]
+    volumes:
+      - /tmp:/tmp
+
+  main:
+    container_name: vb_main
+    build:
+      context: .
+      dockerfile: Dockerfile.main
+    command: ["sleep", "infinity"]
+    depends_on:
+      - opensta
+    environment:
+      OPENSTA_DOCKER_CONTAINER: vb_opensta
+    stdin_open: true
+    tty: true
+    volumes:
+      - .:/workspace
+      - /tmp:/tmp
+      - /var/run/docker.sock:/var/run/docker.sock
+    working_dir: /workspace

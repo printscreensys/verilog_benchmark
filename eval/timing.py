@@ -14,6 +14,7 @@ DEFAULT_YOSYS_CANDIDATES = (
     "/usr/local/bin/oss-cad-suite/bin/yosys",
     "/opt/oss-cad-suite/bin/yosys",
 )
+OPENSTA_CONTAINER_BINARY = "/OpenSTA/build/sta"
 
 
 def _load_timing_spec(timing_spec_file):
@@ -891,6 +892,30 @@ def _docker_image_has_command(image_name, command_name):
     return False, output or f"Command '{command_name}' was not found in Docker image."
 
 
+def _docker_container_available(container_name):
+    try:
+        returncode, output = _run_command(
+            [
+                "docker",
+                "container",
+                "inspect",
+                "-f",
+                "{{.State.Running}}",
+                container_name,
+            ],
+            timeout=20,
+        )
+    except Exception as exc:
+        return False, f"Docker container inspection failed: {str(exc)}"
+
+    if returncode == 0 and output.strip().lower() == "true":
+        return True, "Docker container is available."
+
+    if output:
+        return False, output
+    return False, f"Docker container '{container_name}' was not found."
+
+
 def _resolve_opensta_liberty_file(timing_spec, timing_spec_file):
     configured_liberty = timing_spec.get("opensta_liberty_file")
     if configured_liberty:
@@ -1023,6 +1048,19 @@ def _run_opensta_in_docker(work_dir, image_name):
     )
 
 
+def _run_opensta_in_container(work_dir, container_name):
+    return _run_command(
+        [
+            "docker",
+            "exec",
+            container_name,
+            OPENSTA_CONTAINER_BINARY,
+            f"{work_dir}/timing.tcl",
+        ],
+        timeout=240,
+    )
+
+
 def _run_opensta_timing_check(verilog_file, timing_spec_file, timing_spec):
     result_metrics = _build_base_timing_metrics()
     result_metrics["opensta_image"] = timing_spec["opensta_docker_image"]
@@ -1064,8 +1102,15 @@ def _run_opensta_timing_check(verilog_file, timing_spec_file, timing_spec):
             _build_yosys_script(timing_spec["top_module"]),
             encoding="utf-8",
         )
+        opensta_container_name = os.environ.get("OPENSTA_DOCKER_CONTAINER", "").strip()
+        use_opensta_container = False
+        if opensta_container_name:
+            use_opensta_container, _ = _docker_container_available(opensta_container_name)
         (work_dir / "timing.tcl").write_text(
-            _build_opensta_script(timing_spec, "/work"),
+            _build_opensta_script(
+                timing_spec,
+                str(work_dir) if use_opensta_container else "/work",
+            ),
             encoding="utf-8",
         )
 
@@ -1080,10 +1125,16 @@ def _run_opensta_timing_check(verilog_file, timing_spec_file, timing_spec):
             )
             return result_metrics
 
-        sta_returncode, sta_output = _run_opensta_in_docker(
-            str(work_dir),
-            timing_spec["opensta_docker_image"],
-        )
+        if use_opensta_container:
+            sta_returncode, sta_output = _run_opensta_in_container(
+                str(work_dir),
+                opensta_container_name,
+            )
+        else:
+            sta_returncode, sta_output = _run_opensta_in_docker(
+                str(work_dir),
+                timing_spec["opensta_docker_image"],
+            )
         if sta_returncode != 0:
             result_metrics["opensta_message"] = (
                 "OpenSTA execution failed: " + sta_output
