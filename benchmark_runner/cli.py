@@ -1,11 +1,20 @@
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timezone
 import json
 from pathlib import Path
 import sys
 
 from .tasks import list_tasks
+
+
+def _utc_timestamp() -> str:
+    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+
+
+def _default_report_output_path() -> Path:
+    return Path("reports") / f"report_{_utc_timestamp()}.md"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -46,6 +55,29 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument(
         "--json-output",
         help="Optional file path for writing the final result JSON.",
+    )
+
+    report_parser = subparsers.add_parser("report", help="Generate a markdown report from benchmark runs.")
+    report_parser.add_argument(
+        "--artifacts-root",
+        default="tmp/llm_runs",
+        help="Directory containing model run artifacts. Defaults to tmp/llm_runs.",
+    )
+    report_parser.add_argument(
+        "--n",
+        type=int,
+        default=3,
+        help="Use the latest N attempts per task when counting metric passes. Defaults to 3.",
+    )
+    report_parser.add_argument(
+        "--k",
+        type=int,
+        default=1,
+        help="Compute average pass@K from the selected attempts. Defaults to 1.",
+    )
+    report_parser.add_argument(
+        "--output",
+        help="Optional file path for writing the markdown report.",
     )
 
     return parser
@@ -105,6 +137,24 @@ def _handle_run(args: argparse.Namespace) -> int:
     return 0
 
 
+def _handle_report(args: argparse.Namespace) -> int:
+    from .report import generate_report
+
+    report = generate_report(
+        artifacts_root=Path(args.artifacts_root),
+        n=args.n,
+        k=args.k,
+    )
+    print(report)
+
+    output_path = Path(args.output) if args.output else _default_report_output_path()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(report + "\n", encoding="utf-8")
+    print(f"\nSaved report to {output_path}")
+
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -114,6 +164,8 @@ def main(argv: list[str] | None = None) -> int:
             return _handle_list(args.json)
         if args.command == "run":
             return _handle_run(args)
+        if args.command == "report":
+            return _handle_report(args)
         parser.error(f"Unknown command: {args.command}")
     except Exception as exc:
         print(str(exc), file=sys.stderr)

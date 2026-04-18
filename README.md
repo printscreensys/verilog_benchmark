@@ -126,3 +126,16 @@ Run a single task through an OpenAI-compatible API:
 
 Results, prompts, model responses, generated files, and reports are written
 under `tmp/llm_runs/`.
+
+## Generate A Markdown Report
+
+Generate a Markdown summary from the latest benchmark runs:
+
+```bash
+.venv/bin/python -m benchmark_runner report --n 3 --k 1
+```
+
+This scans `tmp/llm_runs/`, groups runs by model, counts metric passes from the
+latest `n` attempts per task, adds a mean `pass@k` row for each model, and
+writes the markdown report to `reports/report_<timestamp>.md`. Use `--output`
+to override the default path.
