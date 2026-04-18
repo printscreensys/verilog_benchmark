@@ -67,6 +67,13 @@ def _safe_artifact_name(rel_path: str) -> str:
     return rel_path.replace("/", "__")
 
 
+def _safe_path_component(value: str) -> str:
+    sanitized = value.strip().replace("\\", "__").replace("/", "__")
+    sanitized = re.sub(r"\s+", "_", sanitized)
+    sanitized = sanitized.replace("..", "_")
+    return sanitized or "unknown_model"
+
+
 def _truncate(text: str, limit: int = 2000) -> str:
     stripped = text.strip()
     if len(stripped) <= limit:
@@ -225,7 +232,8 @@ class BenchmarkRunner:
         return final_results
 
     def _create_run_dir(self, task: BenchmarkTask) -> Path:
-        base_dir = self.options.artifacts_root / task.task_id
+        model_dir = _safe_path_component(self.llm.config.model)
+        base_dir = self.options.artifacts_root / model_dir / task.task_id
         run_dir = base_dir / _utc_run_id()
         counter = 1
         while run_dir.exists():
