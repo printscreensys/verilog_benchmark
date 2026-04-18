@@ -74,6 +74,13 @@ def _truncate(text: str, limit: int = 2000) -> str:
     return stripped[:limit].rstrip() + "\n...[truncated]"
 
 
+def _task_reference_file(task: BenchmarkTask) -> str | None:
+    reference_file = task.task_dir / "ref.v"
+    if reference_file.exists():
+        return str(reference_file)
+    return None
+
+
 def _extract_code_blocks(text: str) -> list[tuple[str, str]]:
     pattern = re.compile(r"```([^\n`]*)\n(.*?)```", re.S)
     blocks = []
@@ -255,6 +262,7 @@ class BenchmarkRunner:
                 if task.timing_spec_file is not None and task.timing_spec_file.exists()
                 else None
             ),
+            reference_verilog_file=_task_reference_file(task),
         )
 
         return {
@@ -311,7 +319,16 @@ class BenchmarkRunner:
         solution_path = run_dir / "solution.v"
         _write_text(solution_path, solution_text + "\n")
 
-        evaluation = evaluate_task(str(solution_path), str(task.tb_file))
+        evaluation = evaluate_task(
+            str(solution_path),
+            str(task.tb_file),
+            reference_verilog_file=_task_reference_file(task),
+            timing_spec_file=(
+                str(task.timing_spec_file)
+                if task.timing_spec_file is not None and task.timing_spec_file.exists()
+                else None
+            ),
+        )
 
         return {
             "benchmark_pass": bool(evaluation.get("benchmark_pass")),

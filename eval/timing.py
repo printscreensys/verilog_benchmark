@@ -10,6 +10,10 @@ from .common import clean_tool_output
 
 
 DEFAULT_OPENSTA_IMAGE = "opensta_ubuntu22.04"
+DEFAULT_ANALYSIS_PERIOD_NS = 1000.0
+DEFAULT_LIBERTY_FILE = (
+    Path(__file__).resolve().parent.parent / "common" / "sky130_fd_sc_hd.lib"
+)
 DEFAULT_YOSYS_CANDIDATES = (
     "/usr/local/bin/oss-cad-suite/bin/yosys",
     "/opt/oss-cad-suite/bin/yosys",
@@ -130,6 +134,16 @@ def _extract_module_source(verilog_text, top_module):
 
     module_end = module_match.start() + end_match.end()
     return verilog_text[module_match.start():module_end]
+
+
+def _infer_top_module_name(verilog_text):
+    module_match = re.search(
+        r"\bmodule\s+([$A-Za-z_][$\w]*)\b",
+        _strip_verilog_comments(verilog_text),
+    )
+    if module_match is None:
+        raise ValueError("Could not infer a top module name from the Verilog source.")
+    return module_match.group(1)
 
 
 def _extract_header_port_info(module_text):
@@ -644,20 +658,30 @@ def _build_base_timing_metrics():
     return {
         "timing_check_ran": False,
         "timing_constraints_met": None,
+        "area_constraints_met": None,
         "timing_message": "",
         "timing_analysis_method": "",
-        "clock_period_ns": None,
-        "estimated_critical_path_units": None,
-        "estimated_critical_path_ns": None,
-        "timing_slack_ns": None,
-        "max_comb_depth_units": None,
-        "register_bits": None,
-        "max_register_bits": None,
-        "area_constraints_met": None,
-        "constraint_score": None,
-        "opensta_image": None,
-        "opensta_image_available": None,
-        "opensta_message": "",
+        "area_and_timings": {
+            "check_ran": False,
+            "message": "",
+            "analysis_method": "",
+            "constraints_source": None,
+            "liberty_file": None,
+            "opensta_image": None,
+            "opensta_image_available": None,
+            "top_module": None,
+            "timing_ns": None,
+            "timing_target_ns": None,
+            "timing_margin_ns": None,
+            "timing_met": None,
+            "area_um2": None,
+            "area_target_um2": None,
+            "area_margin_um2": None,
+            "area_met": None,
+            "instance_count": None,
+            "instance_count_target": None,
+            "constraints_met": None,
+        },
     }
 
 
@@ -931,6 +955,363 @@ def _resolve_opensta_liberty_file(timing_spec, timing_spec_file):
     return None
 
 
+def _load_area_and_timing_config(timing_spec_file, reference_verilog_file):
+    config = {
+        "top_module": None,
+        "clock_port": None,
+        "opensta_docker_image": DEFAULT_OPENSTA_IMAGE,
+        "opensta_liberty_file": None,
+    }
+
+    if timing_spec_file is not None and Path(timing_spec_file).exists():
+        with open(timing_spec_file, "r", encoding="utf-8") as handle:
+            spec = json.load(handle)
+        if not isinstance(spec, dict):
+            raise ValueError(f"{timing_spec_file} does not contain a JSON object.")
+
+        if spec.get("top_module"):
+            config["top_module"] = str(spec["top_module"])
+        if spec.get("clock_port"):
+            config["clock_port"] = str(spec["clock_port"])
+        if spec.get("opensta_docker_image"):
+            config["opensta_docker_image"] = str(spec["opensta_docker_image"])
+        if spec.get("opensta_liberty_file"):
+            config["opensta_liberty_file"] = str(spec["opensta_liberty_file"])
+
+    if config["top_module"] is None:
+        with open(reference_verilog_file, "r", encoding="utf-8") as handle:
+            config["top_module"] = _infer_top_module_name(handle.read())
+
+    return config
+
+
+def _resolve_real_liberty_file(config, timing_spec_file):
+    configured_liberty = config.get("opensta_liberty_file")
+    if configured_liberty:
+        candidates = [Path(configured_liberty)]
+        if timing_spec_file is not None:
+            candidates.append(Path(timing_spec_file).resolve().parent / configured_liberty)
+        candidates.append(Path(__file__).resolve().parent.parent / configured_liberty)
+        for candidate in candidates:
+            if candidate.exists():
+                return candidate.resolve()
+
+    if DEFAULT_LIBERTY_FILE.exists():
+        return DEFAULT_LIBERTY_FILE.resolve()
+    return None
+
+
+def _extract_module_ports(verilog_file, top_module):
+    with open(verilog_file, "r", encoding="utf-8") as handle:
+        verilog_text = handle.read()
+
+    module_text = _extract_module_source(
+        _strip_verilog_comments(verilog_text),
+        top_module,
+    )
+    module_port_names = _extract_module_port_names(module_text)
+    header_ports = _extract_header_port_info(module_text)
+    body_ports = _extract_body_port_info(module_text, module_port_names)
+    ports = dict(header_ports)
+    ports.update(body_ports)
+    return module_text, ports
+
+
+def _extract_edge_ports_from_sensitivity(sensitivity_text):
+    return re.findall(r"(?:posedge|negedge)\s+([$A-Za-z_][$\w]*)", sensitivity_text or "")
+
+
+def _is_clock_like_port(port_name):
+    return re.search(r"(^|_)(clk|clock)(_|$)", port_name, re.I) is not None
+
+
+def _detect_clock_and_async_ports(module_text, ports, preferred_clock_port=None):
+    input_ports = {
+        name
+        for name, port_info in ports.items()
+        if port_info["direction"] == "input"
+    }
+    clock_ports = []
+    async_ports = set()
+
+    for block in _extract_always_blocks(module_text):
+        sensitivity = block["sensitivity"]
+        if "posedge" not in sensitivity and "negedge" not in sensitivity:
+            continue
+
+        edge_ports = [
+            port_name
+            for port_name in _extract_edge_ports_from_sensitivity(sensitivity)
+            if port_name in input_ports
+        ]
+        if not edge_ports:
+            continue
+
+        selected_clock = None
+        if preferred_clock_port in edge_ports:
+            selected_clock = preferred_clock_port
+        else:
+            for port_name in edge_ports:
+                if _is_clock_like_port(port_name):
+                    selected_clock = port_name
+                    break
+        if selected_clock is None:
+            selected_clock = edge_ports[0]
+
+        if selected_clock not in clock_ports:
+            clock_ports.append(selected_clock)
+
+        for port_name in edge_ports:
+            if port_name != selected_clock:
+                async_ports.add(port_name)
+
+    return clock_ports, async_ports
+
+
+def _tcl_port_collection(port_names):
+    return "[get_ports {" + " ".join(port_names) + "}]"
+
+
+def _build_real_opensta_script(
+    *,
+    top_module,
+    clock_ports,
+    data_input_ports,
+    output_ports,
+    analysis_period_ns,
+    file_prefix="",
+):
+    def prefixed(name):
+        if not file_prefix:
+            return name
+        return f"{file_prefix.rstrip('/')}/{name}"
+
+    lines = [
+        f"read_liberty {prefixed('library.lib')}",
+        f"read_verilog {prefixed('netlist.v')}",
+        f"link_design {top_module}",
+    ]
+
+    if clock_ports:
+        for clock_port in clock_ports:
+            lines.append(
+                f"create_clock -name {clock_port} -period {analysis_period_ns} "
+                f"[get_ports {{{clock_port}}}]"
+            )
+
+        if len(clock_ports) > 1:
+            async_groups = " ".join(
+                f"-group [get_clocks {{{clock_port}}}]"
+                for clock_port in clock_ports
+            )
+            lines.append(f"set_clock_groups -asynchronous {async_groups}")
+
+        if data_input_ports:
+            input_collection = _tcl_port_collection(data_input_ports)
+            for clock_port in clock_ports:
+                lines.append(
+                    f"set_input_delay 0 -clock [get_clocks {{{clock_port}}}] {input_collection}"
+                )
+
+        if output_ports:
+            output_collection = _tcl_port_collection(output_ports)
+            for clock_port in clock_ports:
+                lines.append(
+                    f"set_output_delay 0 -clock [get_clocks {{{clock_port}}}] {output_collection}"
+                )
+    else:
+        lines.append(f"create_clock -name virt_clk -period {analysis_period_ns}")
+        if data_input_ports:
+            lines.append(
+                f"set_input_delay 0 -clock [get_clocks {{virt_clk}}] "
+                f"{_tcl_port_collection(data_input_ports)}"
+            )
+        if output_ports:
+            lines.append(
+                f"set_output_delay 0 -clock [get_clocks {{virt_clk}}] "
+                f"{_tcl_port_collection(output_ports)}"
+            )
+
+    lines.extend(
+        [
+            "report_checks -path_delay max -digits 4",
+            "exit",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def _extract_opensta_worst_slack(report_text):
+    slack_matches = re.findall(
+        r"^\s*(-?\d+(?:\.\d+)?)\s+slack\s+\((?:MET|VIOLATED)\)",
+        report_text,
+        flags=re.M,
+    )
+    if slack_matches:
+        return min(float(value) for value in slack_matches)
+
+    fallback_patterns = [
+        r"slack\s+\((?:MET|VIOLATED)\)\s+(-?\d+(?:\.\d+)?)",
+        r"slack\s+(-?\d+(?:\.\d+)?)",
+    ]
+    values = []
+    for pattern in fallback_patterns:
+        values.extend(float(value) for value in re.findall(pattern, report_text))
+    if values:
+        return min(values)
+    return None
+
+
+def _parse_yosys_stat_json(path):
+    with open(path, "r", encoding="utf-8") as handle:
+        payload = json.load(handle)
+
+    design_stats = payload.get("design")
+    if not isinstance(design_stats, dict):
+        raise ValueError(f"Yosys stats JSON {path} does not contain a design section.")
+
+    area_um2 = float(design_stats.get("area", 0.0) or 0.0)
+    instance_count = int(design_stats.get("num_cells", 0) or 0)
+    return area_um2, instance_count
+
+
+def _build_real_synth_script(top_module_name):
+    return "\n".join(
+        [
+            "read_verilog design.v",
+            f"hierarchy -check -top {top_module_name}",
+            "proc",
+            "opt",
+            "fsm",
+            "opt",
+            "memory",
+            "opt",
+            "techmap",
+            "opt",
+            "dfflibmap -liberty library.lib",
+            "abc -liberty library.lib",
+            "clean",
+            "tee -o stat.json stat -json -liberty library.lib",
+            "write_verilog -noattr netlist.v",
+        ]
+    )
+
+
+def _run_real_design_analysis(verilog_file, config, timing_spec_file):
+    liberty_file = _resolve_real_liberty_file(config, timing_spec_file)
+    if liberty_file is None:
+        raise FileNotFoundError(
+            "No Liberty file was provided or discovered for real area/timing analysis."
+        )
+
+    top_module = config["top_module"]
+    module_text, ports = _extract_module_ports(verilog_file, top_module)
+    input_ports = sorted(
+        name
+        for name, port_info in ports.items()
+        if port_info["direction"] == "input"
+    )
+    output_ports = sorted(
+        name
+        for name, port_info in ports.items()
+        if port_info["direction"] == "output"
+    )
+    clock_ports, async_ports = _detect_clock_and_async_ports(
+        module_text,
+        ports,
+        preferred_clock_port=config.get("clock_port"),
+    )
+    data_input_ports = [
+        port_name
+        for port_name in input_ports
+        if port_name not in set(clock_ports) and port_name not in async_ports
+    ]
+
+    with tempfile.TemporaryDirectory(prefix="real_sta_eval_") as temp_dir:
+        work_dir = Path(temp_dir)
+        shutil.copyfile(verilog_file, work_dir / "design.v")
+        shutil.copyfile(liberty_file, work_dir / "library.lib")
+        (work_dir / "synth.ys").write_text(
+            _build_real_synth_script(top_module),
+            encoding="utf-8",
+        )
+
+        synth_returncode, synth_output = _run_yosys_synthesis(
+            str(work_dir),
+            config["opensta_docker_image"],
+        )
+        if synth_returncode != 0:
+            raise RuntimeError("Mapped synthesis failed: " + synth_output)
+
+        area_um2, instance_count = _parse_yosys_stat_json(work_dir / "stat.json")
+
+        image_available, image_message = _docker_image_available(config["opensta_docker_image"])
+        if not image_available:
+            return {
+                "top_module": top_module,
+                "liberty_file": str(liberty_file),
+                "opensta_image": config["opensta_docker_image"],
+                "opensta_image_available": False,
+                "area_um2": area_um2,
+                "instance_count": instance_count,
+                "timing_ns": None,
+                "message": image_message,
+            }
+
+        opensta_container_name = os.environ.get("OPENSTA_DOCKER_CONTAINER", "").strip()
+        use_opensta_container = False
+        if opensta_container_name:
+            use_opensta_container, _ = _docker_container_available(opensta_container_name)
+
+        (work_dir / "timing.tcl").write_text(
+            _build_real_opensta_script(
+                top_module=top_module,
+                clock_ports=clock_ports,
+                data_input_ports=data_input_ports if clock_ports else input_ports,
+                output_ports=output_ports,
+                analysis_period_ns=DEFAULT_ANALYSIS_PERIOD_NS,
+                file_prefix=str(work_dir) if use_opensta_container else "/work",
+            ),
+            encoding="utf-8",
+        )
+
+        if use_opensta_container:
+            sta_returncode, sta_output = _run_opensta_in_container(
+                str(work_dir),
+                opensta_container_name,
+            )
+        else:
+            sta_returncode, sta_output = _run_opensta_in_docker(
+                str(work_dir),
+                config["opensta_docker_image"],
+            )
+        if sta_returncode != 0:
+            raise RuntimeError("OpenSTA execution failed: " + sta_output)
+
+        if "No paths found." in sta_output:
+            timing_ns = 0.0
+            message = "OpenSTA reported no timing paths; timing was treated as 0.0 ns."
+        else:
+            worst_slack = _extract_opensta_worst_slack(sta_output)
+            if worst_slack is None:
+                raise RuntimeError(
+                    "OpenSTA ran, but worst slack could not be parsed from the report."
+                )
+            timing_ns = round(max(0.0, DEFAULT_ANALYSIS_PERIOD_NS - worst_slack), 4)
+            message = "Real mapped area/timing analysis completed."
+
+        return {
+            "top_module": top_module,
+            "liberty_file": str(liberty_file),
+            "opensta_image": config["opensta_docker_image"],
+            "opensta_image_available": True,
+            "area_um2": round(area_um2, 4),
+            "instance_count": instance_count,
+            "timing_ns": timing_ns,
+            "message": message,
+        }
+
+
 def _extract_opensta_slack(report_text):
     patterns = [
         r"(-?\d+(?:\.\d+)?)\s+slack\s+\((?:MET|VIOLATED)\)",
@@ -1187,57 +1568,110 @@ def _run_opensta_timing_check(verilog_file, timing_spec_file, timing_spec):
     return result_metrics
 
 
-def run_optional_timing_check(verilog_file, timing_spec_file):
-    result_metrics = {
-        "timing_check_ran": False,
-        "timing_constraints_met": None,
-        "timing_message": "",
-        "timing_analysis_method": "",
-        "clock_period_ns": None,
-        "estimated_critical_path_units": None,
-        "estimated_critical_path_ns": None,
-        "timing_slack_ns": None,
-        "max_comb_depth_units": None,
-        "register_bits": None,
-        "max_register_bits": None,
-        "area_constraints_met": None,
-        "constraint_score": None,
-        "opensta_image": None,
-        "opensta_image_available": None,
-        "opensta_message": "",
-    }
+def run_optional_timing_check(verilog_file, timing_spec_file, reference_verilog_file=None):
+    result_metrics = _build_base_timing_metrics()
 
-    if timing_spec_file is None:
-        result_metrics["timing_message"] = "Skipped: no timing specification was provided."
+    if reference_verilog_file is None or not Path(reference_verilog_file).exists():
+        message = "Skipped: no ref.v target was provided for real area/timing analysis."
+        result_metrics["timing_message"] = message
+        result_metrics["area_and_timings"]["message"] = message
         return result_metrics
 
     try:
-        timing_spec = _load_timing_spec(timing_spec_file)
-        opensta_results = _run_opensta_timing_check(
-            verilog_file,
+        config = _load_area_and_timing_config(timing_spec_file, reference_verilog_file)
+        reference_analysis = _run_real_design_analysis(
+            reference_verilog_file,
+            config,
             timing_spec_file,
-            timing_spec,
         )
-        if opensta_results["timing_analysis_method"] == "opensta_docker":
-            return opensta_results
-
-        surrogate_results = _run_surrogate_timing_check(
+        candidate_analysis = _run_real_design_analysis(
             verilog_file,
+            config,
             timing_spec_file,
-            timing_spec,
         )
-        surrogate_results["opensta_image"] = opensta_results["opensta_image"]
-        surrogate_results["opensta_image_available"] = opensta_results["opensta_image_available"]
-        surrogate_results["opensta_message"] = opensta_results["opensta_message"]
-        if opensta_results["opensta_message"]:
-            surrogate_results["timing_message"] = (
-                opensta_results["opensta_message"]
-                + " Falling back to surrogate timing analysis."
-            )
-        return surrogate_results
     except Exception as exc:
+        message = f"Real area/timing analysis error: {str(exc)}"
         result_metrics["timing_check_ran"] = True
-        result_metrics["timing_constraints_met"] = False
-        result_metrics["timing_message"] = f"Timing analysis error: {str(exc)}"
+        result_metrics["timing_message"] = message
+        result_metrics["area_and_timings"]["message"] = message
+        result_metrics["area_and_timings"]["constraints_source"] = str(reference_verilog_file)
+        return result_metrics
+
+    area_met = None
+    if (
+        candidate_analysis.get("area_um2") is not None
+        and reference_analysis.get("area_um2") is not None
+    ):
+        area_met = candidate_analysis["area_um2"] <= reference_analysis["area_um2"]
+
+    timing_met = None
+    if (
+        candidate_analysis.get("timing_ns") is not None
+        and reference_analysis.get("timing_ns") is not None
+    ):
+        timing_met = candidate_analysis["timing_ns"] <= reference_analysis["timing_ns"]
+
+    constraints_met = None
+    if area_met is not None and timing_met is not None:
+        constraints_met = area_met and timing_met
+
+    if (
+        candidate_analysis.get("message")
+        and reference_analysis.get("message")
+        and candidate_analysis["message"] != reference_analysis["message"]
+    ):
+        final_message = (
+            "Candidate: "
+            + candidate_analysis["message"]
+            + " Reference: "
+            + reference_analysis["message"]
+        )
+    else:
+        final_message = (
+            candidate_analysis.get("message")
+            or reference_analysis.get("message")
+            or "Real mapped area/timing analysis completed."
+        )
+
+    result_metrics.update(
+        {
+            "timing_check_ran": constraints_met is not None,
+            "timing_constraints_met": timing_met,
+            "area_constraints_met": area_met,
+            "timing_message": final_message,
+            "timing_analysis_method": "sky130_yosys_opensta",
+            "area_and_timings": {
+                "check_ran": constraints_met is not None,
+                "message": final_message,
+                "analysis_method": "sky130_yosys_opensta",
+                "constraints_source": str(reference_verilog_file),
+                "liberty_file": candidate_analysis.get("liberty_file"),
+                "opensta_image": candidate_analysis.get("opensta_image"),
+                "opensta_image_available": candidate_analysis.get("opensta_image_available"),
+                "top_module": config["top_module"],
+                "timing_ns": candidate_analysis.get("timing_ns"),
+                "timing_target_ns": reference_analysis.get("timing_ns"),
+                "timing_margin_ns": (
+                    None
+                    if candidate_analysis.get("timing_ns") is None
+                    or reference_analysis.get("timing_ns") is None
+                    else round(reference_analysis["timing_ns"] - candidate_analysis["timing_ns"], 4)
+                ),
+                "timing_met": timing_met,
+                "area_um2": candidate_analysis.get("area_um2"),
+                "area_target_um2": reference_analysis.get("area_um2"),
+                "area_margin_um2": (
+                    None
+                    if candidate_analysis.get("area_um2") is None
+                    or reference_analysis.get("area_um2") is None
+                    else round(reference_analysis["area_um2"] - candidate_analysis["area_um2"], 4)
+                ),
+                "area_met": area_met,
+                "instance_count": candidate_analysis.get("instance_count"),
+                "instance_count_target": reference_analysis.get("instance_count"),
+                "constraints_met": constraints_met,
+            },
+        }
+    )
 
     return result_metrics

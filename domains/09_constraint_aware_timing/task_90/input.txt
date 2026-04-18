@@ -21,11 +21,8 @@ Behavioral Requirements:
 7. On reset, clear all internal state and deassert `out_valid`.
 
 Timing / Area Constraints:
-- The benchmark uses a simple timing surrogate.
-- A 16x16 multiply costs 4 delay units.
-- An add or subtract costs 2 delay units.
-- A compare, mux, shift, bitwise operator, unary operator, or concatenation costs 1 delay unit.
-- Every sequential stage must stay within a 4-unit combinational budget.
-- Use at most 100 bits of sequential state, including any valid-pipeline flags.
+- After mapping to the `sky130_fd_sc_hd` standard cell library, the implementation must meet a minimum feasible clock period of at most `7.0443 ns`.
+- After mapping to the same library, the total standard-cell area must be at most `24141.9040 um^2`.
+- These limits are evaluated using real synthesis and static timing analysis against the mapped netlist.
 
 Provide only the Verilog module implementation. Do not include testbenches.

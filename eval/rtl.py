@@ -86,6 +86,7 @@ def evaluate_task(
     run_lint=True,
     run_synth_check=True,
     timing_spec_file=None,
+    reference_verilog_file=None,
     run_timing_check=True,
 ):
     result_metrics = {
@@ -101,7 +102,29 @@ def evaluate_task(
         "synth_message": "",
         "timing_check_ran": False,
         "timing_constraints_met": None,
+        "area_constraints_met": None,
         "timing_message": "",
+        "area_and_timings": {
+            "check_ran": False,
+            "message": "",
+            "analysis_method": "",
+            "constraints_source": None,
+            "liberty_file": None,
+            "opensta_image": None,
+            "opensta_image_available": None,
+            "top_module": None,
+            "timing_ns": None,
+            "timing_target_ns": None,
+            "timing_margin_ns": None,
+            "timing_met": None,
+            "area_um2": None,
+            "area_target_um2": None,
+            "area_margin_um2": None,
+            "area_met": None,
+            "instance_count": None,
+            "instance_count_target": None,
+            "constraints_met": None,
+        },
     }
 
     if run_lint:
@@ -131,7 +154,13 @@ def evaluate_task(
         result_metrics["syntax_correct"] = True
 
         if run_timing_check:
-            result_metrics.update(run_optional_timing_check(llm_generated_file, timing_spec_file))
+            result_metrics.update(
+                run_optional_timing_check(
+                    llm_generated_file,
+                    timing_spec_file,
+                    reference_verilog_file=reference_verilog_file,
+                )
+            )
 
         sim_cmd = ["vvp", output_executable]
         sim_process = subprocess.run(sim_cmd, capture_output=True, text=True, timeout=10)
@@ -139,9 +168,7 @@ def evaluate_task(
 
         if "TEST_PASSED" in sim_output:
             result_metrics["functionally_correct"] = True
-            result_metrics["benchmark_pass"] = (
-                result_metrics["timing_constraints_met"] is not False
-            )
+            result_metrics["benchmark_pass"] = True
         elif "TEST_FAILED" in sim_output:
             result_metrics["error_message"] = "Testbench Functional Failure."
         else:

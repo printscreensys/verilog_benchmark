@@ -35,7 +35,11 @@ def build_parser():
     )
     parser.add_argument(
         "--timing-spec",
-        help="JSON file with timing-closure surrogate constraints for the task.",
+        help="Optional JSON file with real area/timing evaluation metadata for the task.",
+    )
+    parser.add_argument(
+        "--reference-verilog",
+        help="Reference Verilog used to derive hidden area/timing targets, typically ref.v.",
     )
     parser.add_argument(
         "--answers-output",
@@ -59,7 +63,7 @@ def build_parser():
     parser.add_argument(
         "--skip-timing-check",
         action="store_true",
-        help="Skip the optional timing-constraint surrogate check.",
+        help="Skip the optional real area/timing check.",
     )
     parser.add_argument(
         "--sim-output",
@@ -76,6 +80,7 @@ def main(argv=None):
     tb_file = args.tb_file
     clarification_spec_file = args.clarification_spec
     timing_spec_file = args.timing_spec
+    reference_verilog_file = args.reference_verilog
 
     if tb_file is None and task_paths.get("tb_file") and os.path.exists(task_paths["tb_file"]):
         tb_file = task_paths["tb_file"]
@@ -93,6 +98,13 @@ def main(argv=None):
         and os.path.exists(task_paths["timing_spec_file"])
     ):
         timing_spec_file = task_paths["timing_spec_file"]
+
+    if (
+        reference_verilog_file is None
+        and task_paths.get("reference_verilog_file")
+        and os.path.exists(task_paths["reference_verilog_file"])
+    ):
+        reference_verilog_file = task_paths["reference_verilog_file"]
 
     if args.answers_only and not args.questions_file:
         parser.error("--answers-only requires --questions-file.")
@@ -125,6 +137,7 @@ def main(argv=None):
                 run_lint=not args.skip_lint,
                 run_synth_check=not args.skip_synth_check,
                 timing_spec_file=timing_spec_file,
+                reference_verilog_file=reference_verilog_file,
                 run_timing_check=not args.skip_timing_check,
             )
         )

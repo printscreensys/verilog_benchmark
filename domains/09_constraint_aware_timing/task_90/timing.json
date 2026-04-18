@@ -1,12 +1,10 @@
 {
-    "version": 1,
+    "version": 2,
     "task_type": "constraint_aware_timing",
     "top_module": "dual_mac_timing",
     "clock_port": "clk",
-    "clock_period_ns": 4.0,
-    "surrogate_unit_ns": 1.0,
-    "max_comb_depth_units": 4,
-    "max_register_bits": 100,
     "opensta_docker_image": "opensta_ubuntu22.04",
-    "opensta_liberty_file": "generic_benchmark.lib"
+    "opensta_liberty_file": "../../../common/sky130_fd_sc_hd.lib",
+    "timing_target_ns": 7.0443,
+    "area_target_um2": 24141.9040
 }

@@ -60,6 +60,7 @@ def resolve_task_paths(task_dir):
         "clarifications.json",
     )
     task_paths["timing_spec_file"] = os.path.join(resolved_task_dir, "timing.json")
+    task_paths["reference_verilog_file"] = os.path.join(resolved_task_dir, "ref.v")
     return task_paths
 
 
