@@ -1162,17 +1162,38 @@ def _extract_opensta_worst_slack(report_text):
     return None
 
 
-def _parse_yosys_stat_json(path):
-    with open(path, "r", encoding="utf-8") as handle:
-        payload = json.load(handle)
+def _parse_yosys_stat_report(path):
+    report_text = Path(path).read_text(encoding="utf-8").strip()
+    if not report_text:
+        raise ValueError(f"Yosys stats report {path} is empty.")
 
-    design_stats = payload.get("design")
-    if not isinstance(design_stats, dict):
-        raise ValueError(f"Yosys stats JSON {path} does not contain a design section.")
+    if report_text.startswith("{"):
+        payload = json.loads(report_text)
+        design_stats = payload.get("design")
+        if not isinstance(design_stats, dict):
+            raise ValueError(f"Yosys stats JSON {path} does not contain a design section.")
 
-    area_um2 = float(design_stats.get("area", 0.0) or 0.0)
-    instance_count = int(design_stats.get("num_cells", 0) or 0)
-    return area_um2, instance_count
+        area_um2 = float(design_stats.get("area", 0.0) or 0.0)
+        instance_count = int(design_stats.get("num_cells", 0) or 0)
+        return area_um2, instance_count
+
+    area_match = re.search(
+        r"^\s*Chip area for (?:top )?module .*?:\s*([0-9]+(?:\.[0-9]+)?)\s*$",
+        report_text,
+        flags=re.M,
+    )
+    if area_match is None:
+        raise ValueError(f"Yosys stats report {path} does not contain a chip area line.")
+
+    cell_match = re.search(
+        r"^\s*Number of cells:\s*(\d+)\s*$",
+        report_text,
+        flags=re.M,
+    )
+    if cell_match is None:
+        raise ValueError(f"Yosys stats report {path} does not contain a cell count line.")
+
+    return float(area_match.group(1)), int(cell_match.group(1))
 
 
 def _build_real_synth_script(top_module_name):
@@ -1191,7 +1212,7 @@ def _build_real_synth_script(top_module_name):
             "dfflibmap -liberty library.lib",
             "abc -liberty library.lib",
             "clean",
-            "tee -o stat.json stat -json -liberty library.lib",
+            f"tee -o stat.txt stat -top {top_module_name} -liberty library.lib",
             "write_verilog -noattr netlist.v",
         ]
     )
@@ -1243,7 +1264,7 @@ def _run_real_design_analysis(verilog_file, config, timing_spec_file):
         if synth_returncode != 0:
             raise RuntimeError("Mapped synthesis failed: " + synth_output)
 
-        area_um2, instance_count = _parse_yosys_stat_json(work_dir / "stat.json")
+        area_um2, instance_count = _parse_yosys_stat_report(work_dir / "stat.txt")
 
         image_available, image_message = _docker_image_available(config["opensta_docker_image"])
         if not image_available:
