@@ -16,6 +16,8 @@ Behavioral Requirements:
 4. Programmable extra hold:
    - Once the 2-flop synchronizer indicates reset can be released, keep `srst_n` low for `release_delay` additional rising edges of `clk`.
    - `release_delay` values 0, 1, 2, and 3 must be supported.
+   - After `arst_n` returns high, `srst_n` must still be low after the first rising edge of `clk`. If `release_delay = 0`, then `srst_n` must rise on the second rising edge after `arst_n` returned high, and `init_pulse` must be asserted for that release cycle only.
+   - Likewise, if `release_delay = 2`, `srst_n` must remain low for two more rising edges after that base 2-flop release point, then rise on the following edge.
 5. `init_pulse`:
    - Must be 1 for exactly one rising edge of `clk` when `srst_n` transitions from 0 to 1.
    - Must be 0 at all other times.

@@ -23,6 +23,7 @@ Behavioral Requirements:
 3. `read_en` produces a one-cycle read response on the next rising clock edge:
    - `data_valid` must pulse high for exactly one cycle,
    - `correctable_error` and `uncorrectable_error` must also be one-cycle pulses.
+   - If `read_en` is already high before a rising edge of `clk`, that rising edge is the read-response edge. The response must be visible immediately after that edge; do not insert an additional internal wait state beyond the edge where the read is sampled.
 4. When no read response is being produced, drive `data_out` to `8'h00` and keep all pulse outputs low.
 5. `inject_single_fault` and `inject_double_fault` model transient corruption of the protected codeword for that read only. If both are asserted, `inject_double_fault` has priority.
 6. On a single-bit fault, return the original stored byte and assert `correctable_error`.

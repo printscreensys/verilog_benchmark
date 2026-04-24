@@ -19,6 +19,8 @@ Behavioral Requirements:
    - When `test_mode` is 0 and `load_en` is 0, retain the current value.
 3. Test-mode reset override:
    - When `test_mode` is 1, asserting `rst_n` = 0 MUST NOT clear the scan register. This models the common DFT requirement that reset be masked during scan shift.
+   - If `rst_n` is already 0 while `test_mode` changes from 1 back to 0, the functional asynchronous reset behavior must immediately become active again and clear the register outputs.
+   - The asynchronous reset behavior should be described as if reset is masked before it reaches the flop's async-reset control, rather than by making a flop sensitive to raw `rst_n` and then conditionally ignoring that reset edge in procedural logic.
 4. Scan behavior:
    - Only in `test_mode` with `scan_en` = 1, perform one shift on each rising edge of `clk`.
    - `scan_out` must capture the PREVIOUS `data_out[3]` bit.

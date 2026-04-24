@@ -22,5 +22,6 @@ Behavioral Requirements:
    - The module must assert `m_valid` when a full 64-bit word is ready.
    - If the master is not ready (`m_ready` == 0) when the 64-bit word is formed, the module MUST stall and assert backpressure (`s_ready` = 0) to avoid losing data.
    - Data is only successfully transferred on an interface when both `valid` and `ready` are 1 on the rising clock edge.
+   - Once the first 32-bit word has been buffered, the 64-bit output word is considered "formed" in the same cycle that the second 32-bit word is being accepted. In that cycle, `m_data` must already reflect `{second_word, first_word}` and `m_valid` must already be asserted; do not introduce an extra output cycle after accepting the second word.
 
 Provide only the Verilog module implementation. Do not include testbenches.
