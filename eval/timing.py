@@ -146,10 +146,10 @@ def _infer_top_module_name(verilog_text):
     return module_match.group(1)
 
 
-def _extract_header_port_info(module_text):
+def _extract_module_header_blob(module_text):
     module_name_match = re.search(r"\bmodule\s+[$A-Za-z_][$\w]*\s*\(", module_text)
     if module_name_match is None:
-        return {}
+        return None
 
     header_start = module_name_match.end() - 1
     cursor = header_start
@@ -166,9 +166,16 @@ def _extract_header_port_info(module_text):
         cursor += 1
 
     if paren_depth != 0:
+        return None
+
+    return module_text[header_start + 1:cursor]
+
+
+def _extract_header_port_info(module_text):
+    port_blob = _extract_module_header_blob(module_text)
+    if port_blob is None:
         return {}
 
-    port_blob = module_text[header_start + 1:cursor]
     ports = {}
 
     for segment in _split_top_level(port_blob, ","):
@@ -195,28 +202,10 @@ def _extract_header_port_info(module_text):
 
 
 def _extract_module_port_names(module_text):
-    module_name_match = re.search(r"\bmodule\s+[$A-Za-z_][$\w]*\s*\(", module_text)
-    if module_name_match is None:
+    port_blob = _extract_module_header_blob(module_text)
+    if port_blob is None:
         return []
 
-    header_start = module_name_match.end() - 1
-    cursor = header_start
-    paren_depth = 0
-
-    while cursor < len(module_text):
-        char = module_text[cursor]
-        if char == "(":
-            paren_depth += 1
-        elif char == ")":
-            paren_depth -= 1
-            if paren_depth == 0:
-                break
-        cursor += 1
-
-    if paren_depth != 0:
-        return []
-
-    port_blob = module_text[header_start + 1:cursor]
     port_names = []
     for segment in _split_top_level(port_blob, ","):
         port_name = _base_signal_name(segment)

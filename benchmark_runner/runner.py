@@ -249,38 +249,14 @@ class BenchmarkRunner:
         prompt_text = task.input_file.read_text(encoding="utf-8")
         _write_text(run_dir / "prompt.txt", prompt_text)
 
-        completion = self.llm.chat(
-            [
-                {"role": "system", "content": RTL_SYSTEM_PROMPT},
-                {"role": "user", "content": prompt_text},
-            ]
-        )
-        _write_text(run_dir / "response.txt", completion["text"])
-        _write_json(run_dir / "response.json", completion["response"])
-
-        solution_text = extract_verilog_source(completion["text"])
-        solution_path = run_dir / "solution.v"
-        _write_text(solution_path, solution_text + "\n")
-
-        evaluation = evaluate_task(
-            str(solution_path),
-            str(task.tb_file),
-            timing_spec_file=(
-                str(task.timing_spec_file)
-                if task.timing_spec_file is not None and task.timing_spec_file.exists()
-                else None
-            ),
-            reference_verilog_file=_task_reference_file(task),
-        )
+        rtl_result = self._generate_and_evaluate_rtl(task, run_dir, prompt_text)
 
         return {
-            "benchmark_pass": bool(evaluation.get("benchmark_pass")),
-            "evaluation": evaluation,
+            "benchmark_pass": bool(rtl_result["evaluation"].get("benchmark_pass")),
+            "evaluation": rtl_result["evaluation"],
             "artifacts": {
                 "prompt": _display_path(run_dir / "prompt.txt"),
-                "response_text": _display_path(run_dir / "response.txt"),
-                "response_json": _display_path(run_dir / "response.json"),
-                "solution": _display_path(solution_path),
+                **rtl_result["artifacts"],
             },
         }
 
@@ -314,39 +290,57 @@ class BenchmarkRunner:
         )
         _write_text(run_dir / "prompt_augmented.txt", augmented_prompt)
 
-        rtl_completion = self.llm.chat(
-            [
-                {"role": "system", "content": RTL_SYSTEM_PROMPT},
-                {"role": "user", "content": augmented_prompt},
-            ]
-        )
-        _write_text(run_dir / "response.txt", rtl_completion["text"])
-        _write_json(run_dir / "response.json", rtl_completion["response"])
-
-        solution_text = extract_verilog_source(rtl_completion["text"])
-        solution_path = run_dir / "solution.v"
-        _write_text(solution_path, solution_text + "\n")
-
-        evaluation = evaluate_task(
-            str(solution_path),
-            str(task.tb_file),
-            reference_verilog_file=_task_reference_file(task),
-            timing_spec_file=(
-                str(task.timing_spec_file)
-                if task.timing_spec_file is not None and task.timing_spec_file.exists()
-                else None
-            ),
-        )
+        rtl_result = self._generate_and_evaluate_rtl(task, run_dir, augmented_prompt)
 
         return {
-            "benchmark_pass": bool(evaluation.get("benchmark_pass")),
+            "benchmark_pass": bool(rtl_result["evaluation"].get("benchmark_pass")),
             "clarification": clarification_results,
-            "evaluation": evaluation,
+            "evaluation": rtl_result["evaluation"],
             "artifacts": {
                 "prompt_original": _display_path(run_dir / "prompt_original.txt"),
                 "clarification_questions": _display_path(run_dir / "clarification_questions.txt"),
                 "clarification_answers": _display_path(run_dir / "clarification_answers.txt"),
                 "prompt_augmented": _display_path(run_dir / "prompt_augmented.txt"),
+                **rtl_result["artifacts"],
+            },
+        }
+
+    def _generate_and_evaluate_rtl(
+        self,
+        task: BenchmarkTask,
+        run_dir: Path,
+        prompt_text: str,
+    ) -> dict[str, Any]:
+        if task.tb_file is None:
+            raise ValueError(f"RTL task {task.task_id} is missing tb.v.")
+
+        completion = self.llm.chat(
+            [
+                {"role": "system", "content": RTL_SYSTEM_PROMPT},
+                {"role": "user", "content": prompt_text},
+            ]
+        )
+        _write_text(run_dir / "response.txt", completion["text"])
+        _write_json(run_dir / "response.json", completion["response"])
+
+        solution_path = run_dir / "solution.v"
+        _write_text(solution_path, extract_verilog_source(completion["text"]) + "\n")
+
+        timing_spec_file = (
+            str(task.timing_spec_file)
+            if task.timing_spec_file is not None and task.timing_spec_file.exists()
+            else None
+        )
+        evaluation = evaluate_task(
+            str(solution_path),
+            str(task.tb_file),
+            timing_spec_file=timing_spec_file,
+            reference_verilog_file=_task_reference_file(task),
+        )
+
+        return {
+            "evaluation": evaluation,
+            "artifacts": {
                 "response_text": _display_path(run_dir / "response.txt"),
                 "response_json": _display_path(run_dir / "response.json"),
                 "solution": _display_path(solution_path),

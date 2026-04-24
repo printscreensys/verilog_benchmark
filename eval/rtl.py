@@ -3,80 +3,122 @@ import shlex
 import shutil
 import subprocess
 import tempfile
+from functools import lru_cache
 
 from .common import clean_tool_output
 from .timing import run_optional_timing_check
 
 
-def run_optional_lint(verilog_file):
-    result_metrics = {
-        "lint_ran": False,
-        "lint_clean": None,
-        "lint_message": "",
-    }
-
-    if shutil.which("verilator") is None:
-        result_metrics["lint_message"] = "Skipped: verilator is not installed."
+def _run_optional_tool(
+    command,
+    *,
+    executable,
+    result_template,
+    ran_key,
+    passed_key,
+    message_key,
+    evaluator,
+    label,
+):
+    result_metrics = dict(result_template)
+    if shutil.which(executable) is None:
+        result_metrics[message_key] = f"Skipped: {executable} is not installed."
         return result_metrics
 
+    try:
+        process = subprocess.run(command, capture_output=True, text=True, timeout=10)
+        output = clean_tool_output(process.stdout + process.stderr)
+        result_metrics[ran_key] = True
+        result_metrics[passed_key] = evaluator(process, output)
+        result_metrics[message_key] = output
+    except Exception as exc:
+        result_metrics[ran_key] = True
+        result_metrics[passed_key] = False
+        result_metrics[message_key] = f"{label} execution error: {str(exc)}"
+
+    return result_metrics
+
+
+@lru_cache(maxsize=1)
+def _supported_verilator_warning_flags():
+    if shutil.which("verilator") is None:
+        return ()
+
+    warning_flags = (
+        "-Wno-DECLFILENAME",
+        "-Wno-UNUSEDSIGNAL",
+        "-Wno-PINCONNECTEMPTY",
+    )
+    supported_flags = []
+
+    with tempfile.NamedTemporaryFile("w", suffix=".v", delete=False) as handle:
+        handle.write("module lint_probe; endmodule\n")
+        probe_file = handle.name
+
+    try:
+        for warning_flag in warning_flags:
+            probe = subprocess.run(
+                ["verilator", "--lint-only", warning_flag, probe_file],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            output = clean_tool_output(probe.stdout + probe.stderr)
+            if "Unknown warning specified" not in output:
+                supported_flags.append(warning_flag)
+    finally:
+        if os.path.exists(probe_file):
+            os.remove(probe_file)
+
+    return tuple(supported_flags)
+
+
+def run_optional_lint(verilog_file):
     lint_cmd = [
         "verilator",
         "--lint-only",
         "-Wall",
-        "-Wno-DECLFILENAME",
-        "-Wno-UNUSEDSIGNAL",
-        "-Wno-PINCONNECTEMPTY",
+        *_supported_verilator_warning_flags(),
         verilog_file,
     ]
-
-    try:
-        lint_process = subprocess.run(lint_cmd, capture_output=True, text=True, timeout=10)
-        lint_output = clean_tool_output(lint_process.stdout + lint_process.stderr)
-
-        result_metrics["lint_ran"] = True
-        result_metrics["lint_clean"] = (
-            lint_process.returncode == 0
-            and "%Warning" not in lint_output
-            and "%Error" not in lint_output
-        )
-        result_metrics["lint_message"] = lint_output
-    except Exception as exc:
-        result_metrics["lint_ran"] = True
-        result_metrics["lint_clean"] = False
-        result_metrics["lint_message"] = f"Lint execution error: {str(exc)}"
-
-    return result_metrics
+    return _run_optional_tool(
+        lint_cmd,
+        executable="verilator",
+        result_template={
+            "lint_ran": False,
+            "lint_clean": None,
+            "lint_message": "",
+        },
+        ran_key="lint_ran",
+        passed_key="lint_clean",
+        message_key="lint_message",
+        evaluator=lambda process, output: (
+            process.returncode == 0
+            and "%Warning" not in output
+            and "%Error" not in output
+        ),
+        label="Lint",
+    )
 
 
 def run_optional_synth_check(verilog_file):
-    result_metrics = {
-        "synth_check_ran": False,
-        "synth_check_passed": None,
-        "synth_message": "",
-    }
-
-    if shutil.which("yosys") is None:
-        result_metrics["synth_message"] = "Skipped: yosys is not installed."
-        return result_metrics
-
     yosys_script = (
         "read_verilog {file}; hierarchy -check -auto-top; proc; check -assert"
     ).format(file=shlex.quote(verilog_file))
-    synth_cmd = ["yosys", "-q", "-p", yosys_script]
-
-    try:
-        synth_process = subprocess.run(synth_cmd, capture_output=True, text=True, timeout=10)
-        synth_output = clean_tool_output(synth_process.stdout + synth_process.stderr)
-
-        result_metrics["synth_check_ran"] = True
-        result_metrics["synth_check_passed"] = synth_process.returncode == 0
-        result_metrics["synth_message"] = synth_output
-    except Exception as exc:
-        result_metrics["synth_check_ran"] = True
-        result_metrics["synth_check_passed"] = False
-        result_metrics["synth_message"] = f"Synthesis check execution error: {str(exc)}"
-
-    return result_metrics
+    return _run_optional_tool(
+        ["yosys", "-q", "-p", yosys_script],
+        executable="yosys",
+        result_template={
+            "synth_check_ran": False,
+            "synth_check_passed": None,
+            "synth_message": "",
+        },
+        ran_key="synth_check_ran",
+        passed_key="synth_check_passed",
+        message_key="synth_message",
+        evaluator=lambda process, _output: process.returncode == 0,
+        label="Synthesis check",
+    )
 
 
 def evaluate_task(
