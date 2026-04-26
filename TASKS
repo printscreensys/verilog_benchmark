@@ -25,3 +25,19 @@ task_101 [rtl_generation] (domains/10_fault_tolerant_safety/task_101) - Design a
 task_110 [rtl_generation] (domains/11_side_channel_constant_time/task_110) - Design a Verilog-2001 module named `consttime_word_compare` that compares two 32-bit words using a fixed-latency constant-time control flow.
 task_111 [rtl_generation] (domains/11_side_channel_constant_time/task_111) - Design a Verilog-2001 module named `consttime_byte_search` that searches for a byte value using fixed-latency constant-time control flow.
 task_121 [cdv] (domains/12_cdv/tasks/task_121) - Queue Credit Tracker Coverage Closure
+task_122 [cdv] (domains/12_cdv/tasks/task_122) - Alloc Two Static RTL Analysis
+task_123 [cdv] (domains/12_cdv/tasks/task_123) - Top DEC Router Pipeline Analysis
+task_124 [cdv] (domains/12_cdv/tasks/task_124) - SMII TX/RX Protocol Analysis
+task_125 [cdv] (domains/12_cdv/tasks/task_125) - BCH BMA Serial Dependency Analysis
+task_130 [rtl_generation] (domains/03_low_power_design/task_130) - Design a Verilog-2001 module named `or1200_pm` that implements the OR1200 power-management block.
+task_131 [rtl_generation] (domains/04_chiplet_die_to_die_integration/task_131) - Design a standalone Verilog-2001 module named `alloc_two`.
+task_140 [rtl_description] (domains/08_spec_clarification/task_140) - Describe what the provided Verilog module does.
+task_150 [code_completion] (domains/15_verilogdb_code_completion/task_150) - Complete the missing LDPC tail VNU index mapping section.
+task_151 [code_completion] (domains/15_verilogdb_code_completion/task_151) - Complete the missing JTAG TAP next-state table section.
+task_152 [code_completion] (domains/15_verilogdb_code_completion/task_152) - Complete the missing legacy L-SIG rate decode section.
+task_153 [code_completion] (domains/15_verilogdb_code_completion/task_153) - Complete the missing debug-interface counter and TDO mux section.
+task_154 [code_completion] (domains/15_verilogdb_code_completion/task_154) - Complete the missing QSPI chip-select control section.
+task_155 [code_completion] (domains/15_verilogdb_code_completion/task_155) - Complete the missing DMMU TLB way-selection loop section.
+task_156 [code_completion] (domains/15_verilogdb_code_completion/task_156) - Complete the missing Ethernet transmit nibble mux section.
+task_157 [code_completion] (domains/15_verilogdb_code_completion/task_157) - Complete the missing IMMU no-MMU pass-through path section.
+task_158 [code_completion] (domains/15_verilogdb_code_completion/task_158) - Complete the missing SDRAM request synchronization section.

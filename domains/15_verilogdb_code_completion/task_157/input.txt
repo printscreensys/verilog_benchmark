@@ -1,0 +1,39 @@
+Complete the missing IMMU page-cross and no-MMU pass-through section.
+
+This completion is derived from an instruction MMU no-MMU/pass-through path.
+The missing section should select the boot/default instruction address, detect
+page crossing, register the VPN, and drive no-MMU pass-through outputs.
+
+Return only the completed Verilog source.
+
+```verilog
+module or1200_immu_no_mmu_path #(
+    parameter OR1200_IMMU_PS = 13,
+    parameter OR1200_IMMU_CI = 1'b0
+)(
+    input clk,
+    input rst,
+    input icpu_adr_select,
+    input [31:0] icpu_adr_boot,
+    input [31:0] icpu_adr_default,
+    input [31:0] icpu_adr_i,
+    input icpu_cycstb_i,
+    input qmemimmu_rty_i,
+    input qmemimmu_err_i,
+    input [3:0] qmemimmu_tag_i,
+    input mbist_si_i,
+    output reg [31:0] icpu_adr_o,
+    output page_cross,
+    output reg [31-OR1200_IMMU_PS:0] icpu_vpn_r,
+    output [31:0] spr_dat_o,
+    output [31:0] qmemimmu_adr_o,
+    output [3:0] icpu_tag_o,
+    output qmemimmu_cycstb_o,
+    output icpu_rty_o,
+    output icpu_err_o,
+    output qmemimmu_ci_o,
+    output mbist_so_o
+);
+// FILL_MISSING_SECTION
+endmodule
+```

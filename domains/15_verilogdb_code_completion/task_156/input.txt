@@ -1,0 +1,24 @@
+Complete the missing Ethernet transmit nibble select logic.
+
+This completion is derived from an Ethernet MAC transmit-data combinational
+mux. The missing section should prioritize data nibbles, FCS, jam,
+preamble/SFD, and idle zero output.
+
+Return only the completed Verilog source.
+
+```verilog
+module eth_txethmac_nibble_mux(
+    input StatePreamble,
+    input [1:0] StateData,
+    input StateFCS,
+    input StateJam,
+    input NibCntEq15,
+    input [7:0] TxData,
+    input [31:0] Crc,
+    output reg [3:0] MTxD_d
+);
+always @* begin
+    // FILL_MISSING_SECTION
+end
+endmodule
+```

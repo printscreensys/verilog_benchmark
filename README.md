@@ -90,6 +90,13 @@ PY
 This sweep covers the standard `tb.v`-based tasks. Agentic CDV tasks use a
 separate workflow.
 
+RTL-to-NL description tasks use the same `benchmark_runner run` command as
+single-shot tasks and are scored with a rubric instead of a Verilog testbench.
+
+Code-completion tasks are also single-shot tasks. Their prompts contain a
+Verilog skeleton with a `FILL_MISSING_SECTION` marker, and evaluation checks the
+completed module against a focused testbench for that missing section.
+
 ## Run Agentic CDV Tasks
 
 Prepare a writable workspace:

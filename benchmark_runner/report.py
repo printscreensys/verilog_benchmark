@@ -111,7 +111,7 @@ def _discover_runs(artifacts_root: Path) -> dict[str, dict[str, list[RunSample]]
 
     for path in artifacts_root.rglob("results.json"):
         payload = _load_json(path)
-        if payload.get("task_kind") == "cdv":
+        if payload.get("task_kind") in {"cdv", "rtl_description"}:
             continue
 
         task_id = payload.get("task_id")
@@ -155,7 +155,7 @@ def _build_report_tasks(task_ids: set[str]) -> list[ReportTask]:
     report_tasks: list[ReportTask] = []
 
     for task in list_tasks():
-        if task.task_kind == "cdv":
+        if task.task_kind in {"cdv", "rtl_description"}:
             continue
         if task.task_id not in remaining:
             continue

@@ -1,0 +1,25 @@
+Complete the missing section in the Verilog-2001 module below.
+
+This completion is derived from a tail `VNU_2` instantiation pattern in a
+larger LDPC decoder. The missing code should map a selected tail VNU entry to
+the Q/R indices and L/P indices used by the decoder.
+
+Return only the completed Verilog source.
+
+```verilog
+module ldpc_decoder_tail_map(
+    input [3:0] entry,
+    output reg [11:0] q1_index,
+    output reg [11:0] q2_index,
+    output reg [9:0] l_index,
+    output reg [9:0] p_index
+);
+always @* begin
+    q1_index = 12'd0;
+    q2_index = 12'd0;
+    l_index = 10'd0;
+    p_index = 10'd0;
+    // FILL_MISSING_SECTION
+end
+endmodule
+```

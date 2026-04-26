@@ -1,0 +1,44 @@
+Complete the missing QSPI chip-select/control combinational section.
+
+This completion is derived from generated QSPI media-control equations. The
+missing section should compute active CS, deassert/update conditions, and
+idle-state link/PHY handshake helper signals.
+
+Return only the completed Verilog source.
+
+```verilog
+module sirv_qspi_media_cs_control(
+    input clear,
+    input phy_io_op_ready,
+    input phy_io_op_valid,
+    input io_link_tx_valid,
+    input io_link_cs_set,
+    input io_link_cs_clear,
+    input io_link_cs_hold,
+    input [7:0] io_link_cnt,
+    input io_ctrl_cs_id,
+    input io_ctrl_cs_dflt_0,
+    input [7:0] io_ctrl_dla_cssck,
+    input [7:0] io_ctrl_dla_sckcs,
+    input [7:0] io_ctrl_dla_interxfr,
+    input [1:0] state,
+    input cs_assert,
+    input cs_set,
+    input cs_dflt_0,
+    input cs_id,
+    output cs_active_0,
+    output cs_update,
+    output cs_deassert,
+    output continuous,
+    output [7:0] next_cnt_idle,
+    output [1:0] next_state_idle,
+    output next_cs_assert_idle,
+    output next_cs_set_idle,
+    output next_cs_dflt_idle,
+    output next_cs_id_idle,
+    output tx_ready_idle,
+    output phy_valid_idle
+);
+// FILL_MISSING_SECTION
+endmodule
+```

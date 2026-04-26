@@ -1,0 +1,17 @@
+{
+  "passing_score": 8,
+  "concepts": [
+    {"name": "reed_solomon_chien_search", "keywords": ["reed-solomon", "chien"]},
+    {"name": "gf_2_8_arithmetic", "keywords": ["gf(2^8)", "galois", "finite field", "gf"]},
+    {"name": "locator_polynomial_lambda", "keywords": ["lambda", "locator"]},
+    {"name": "evaluator_polynomial_omega", "keywords": ["omega", "evaluator"]},
+    {"name": "erasure_polynomial_epsilon", "keywords": ["epsilon", "erasure"]},
+    {"name": "sync_loads_polynomials", "keywords": ["sync", "load"]},
+    {"name": "enable_gates_pipeline", "keywords": ["enable", "pipeline"]},
+    {"name": "iterates_255_symbols", "keywords": ["255"]},
+    {"name": "done_at_end", "keywords": ["done"]},
+    {"name": "counts_errors", "keywords": ["numerror", "error count", "number of errors"]},
+    {"name": "uses_multiplier_and_inverse_helpers", "keywords": ["rsdecodemult", "rsdecodeinv", "multiplier", "inverse"]},
+    {"name": "forney_style_error_magnitude", "keywords": ["forney", "error magnitude", "error value"]}
+  ]
+}

@@ -10,6 +10,7 @@ import sys
 from typing import Any
 
 from eval.clarification import evaluate_clarification_questions
+from eval.nl import evaluate_description
 from eval.rtl import evaluate_task
 
 from .client import LLMConfig, OpenAICompatibleLLM
@@ -26,8 +27,12 @@ CLARIFICATION_SYSTEM_PROMPT = (
     "only the questions, one per line. Do not generate RTL."
 )
 CDV_AGENT_SYSTEM_PROMPT = (
-    "You are a coverage-closure agent for a hardware verification benchmark. "
-    "You may edit only the explicitly allowed files. Return JSON only."
+    "You are an agent for an iterative hardware benchmark. You may edit only "
+    "the explicitly allowed files. Return JSON only."
+)
+RTL_DESCRIPTION_SYSTEM_PROMPT = (
+    "You are an expert RTL engineer. Describe the provided Verilog module "
+    "concisely and technically. Do not generate RTL."
 )
 DEFAULT_ARTIFACTS_ROOT = REPO_ROOT / "tmp" / "llm_runs"
 
@@ -215,6 +220,8 @@ class BenchmarkRunner:
 
         if task.task_kind == "cdv":
             results = self._run_cdv_task(task, run_dir)
+        elif task.task_kind == "rtl_description":
+            results = self._run_rtl_description_task(task, run_dir)
         elif task.task_kind == "spec_clarification":
             results = self._run_spec_clarification_task(task, run_dir)
         else:
@@ -242,9 +249,46 @@ class BenchmarkRunner:
         run_dir.mkdir(parents=True, exist_ok=False)
         return run_dir
 
+    def _run_rtl_description_task(self, task: BenchmarkTask, run_dir: Path) -> dict[str, Any]:
+        if task.description_rubric_file is None:
+            raise ValueError(f"RTL description task {task.task_id} is missing description_rubric.json.")
+
+        rtl_file = task.task_dir / "rtl.v"
+        if not rtl_file.exists():
+            raise ValueError(f"RTL description task {task.task_id} is missing rtl.v.")
+
+        prompt_text = (
+            task.input_file.read_text(encoding="utf-8").rstrip()
+            + "\n\nVerilog source:\n```verilog\n"
+            + rtl_file.read_text(encoding="utf-8").rstrip()
+            + "\n```\n"
+        )
+        _write_text(run_dir / "prompt.txt", prompt_text)
+
+        completion = self.llm.chat(
+            [
+                {"role": "system", "content": RTL_DESCRIPTION_SYSTEM_PROMPT},
+                {"role": "user", "content": prompt_text},
+            ]
+        )
+        response_path = run_dir / "response.txt"
+        _write_text(response_path, completion["text"])
+        _write_json(run_dir / "response.json", completion["response"])
+
+        evaluation = evaluate_description(str(response_path), str(task.description_rubric_file))
+        return {
+            "benchmark_pass": bool(evaluation["benchmark_pass"]),
+            "evaluation": evaluation,
+            "artifacts": {
+                "prompt": _display_path(run_dir / "prompt.txt"),
+                "response_text": _display_path(response_path),
+                "response_json": _display_path(run_dir / "response.json"),
+            },
+        }
+
     def _run_single_shot_rtl_task(self, task: BenchmarkTask, run_dir: Path) -> dict[str, Any]:
         if task.tb_file is None:
-            raise ValueError(f"RTL task {task.task_id} is missing tb.v.")
+            raise ValueError(f"RTL/code-completion task {task.task_id} is missing tb.v.")
 
         prompt_text = task.input_file.read_text(encoding="utf-8")
         _write_text(run_dir / "prompt.txt", prompt_text)
@@ -312,7 +356,7 @@ class BenchmarkRunner:
         prompt_text: str,
     ) -> dict[str, Any]:
         if task.tb_file is None:
-            raise ValueError(f"RTL task {task.task_id} is missing tb.v.")
+            raise ValueError(f"RTL/code-completion task {task.task_id} is missing tb.v.")
 
         completion = self.llm.chat(
             [

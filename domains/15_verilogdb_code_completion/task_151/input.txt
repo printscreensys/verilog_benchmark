@@ -1,0 +1,26 @@
+Complete the missing TAP next-state logic in the Verilog-2001 module below.
+
+This completion is derived from a JTAG debug TAP FSM. The missing section
+should implement the complete state transition table controlled by `TMS`.
+
+Return only the completed Verilog source.
+
+```verilog
+module dbg_top_tap_next(
+    input [3:0] tap_state,
+    input TMS,
+    output reg [3:0] tap_next_state
+);
+localparam TAP_TEST_LOGIC_RESET = 4'd0, TAP_RUN_TEST_IDLE = 4'd1,
+           TAP_SELECT_DR_SCAN = 4'd2, TAP_CAPTURE_DR = 4'd3,
+           TAP_SHIFT_DR = 4'd4, TAP_EXIT1_DR = 4'd5,
+           TAP_PAUSE_DR = 4'd6, TAP_EXIT2_DR = 4'd7,
+           TAP_UPDATE_DR = 4'd8, TAP_SELECT_IR_SCAN = 4'd9,
+           TAP_CAPTURE_IR = 4'd10, TAP_SHIFT_IR = 4'd11,
+           TAP_EXIT1_IR = 4'd12, TAP_PAUSE_IR = 4'd13,
+           TAP_EXIT2_IR = 4'd14, TAP_UPDATE_IR = 4'd15;
+always @* begin
+    // FILL_MISSING_SECTION
+end
+endmodule
+```

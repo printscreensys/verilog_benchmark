@@ -1,0 +1,37 @@
+Complete the missing DMMU way-select and write-enable section.
+
+This completion is derived from a DMMU TLB hit/translation loop. The missing
+code should clear defaults, scan ways, select huge-page or normal-page
+translation metadata, and generate per-way match/translation write enables for
+reload or SPR access.
+
+Return only the completed Verilog source.
+
+```verilog
+module mor1kx_dmmu_way_select #(
+    parameter OPTION_DMMU_WAYS = 4
+)(
+    input [OPTION_DMMU_WAYS-1:0] way_huge,
+    input [OPTION_DMMU_WAYS-1:0] way_huge_hit,
+    input [OPTION_DMMU_WAYS-1:0] way_hit,
+    input [95:0] dtlb_trans_huge_flat,
+    input [127:0] dtlb_trans_flat,
+    input [23:0] virt_addr_low24,
+    input [12:0] virt_addr_low13,
+    input [1:0] spr_way_idx,
+    input dtlb_match_reload_we,
+    input dtlb_trans_reload_we,
+    input dtlb_match_spr_cs,
+    input dtlb_trans_spr_cs,
+    input spr_bus_we_i,
+    input tlb_reload_pagefault,
+    output reg tlb_miss_o,
+    output reg [31:0] phys_addr_o,
+    output reg ure, uwe, sre, swe,
+    output reg cache_inhibit_o,
+    output reg [OPTION_DMMU_WAYS-1:0] dtlb_match_we,
+    output reg [OPTION_DMMU_WAYS-1:0] dtlb_trans_we
+);
+// FILL_MISSING_SECTION
+endmodule
+```

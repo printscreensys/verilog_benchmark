@@ -1,0 +1,11 @@
+Describe what the provided Verilog module does.
+
+Focus on:
+- high-level purpose,
+- input/output role,
+- state and pipeline behavior,
+- algorithmic operations,
+- external helper modules used,
+- completion/error-count behavior.
+
+Do not rewrite the RTL. Return a concise technical description.

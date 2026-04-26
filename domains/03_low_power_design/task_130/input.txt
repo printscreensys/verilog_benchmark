@@ -1,0 +1,20 @@
+Design a Verilog-2001 module named `or1200_pm` that implements the OR1200 power-management block.
+
+Include any required macro definitions in your answer so the file is standalone.
+
+Interface:
+- Inputs: `clk`, `rst`, `pic_wakeup`, `spr_write`, `spr_addr[31:0]`, `spr_dat_i[31:0]`, `pm_cpustall`.
+- Outputs: `spr_dat_o[31:0]`, `pm_clksd[3:0]`, `pm_dc_gate`, `pm_ic_gate`, `pm_dmmu_gate`, `pm_immu_gate`, `pm_tt_gate`, `pm_cpu_gate`, `pm_wakeup`, `pm_lvolt`.
+
+Required behavior:
+- Implement a power-management register (PMR) selected by SPR group and offset fields.
+- PMR fields are `sdf[3:0]`, `dme`, `sme`, and `dcge`.
+- On reset, all PMR fields clear to zero.
+- On a selected SPR write, update PMR fields from `spr_dat_i`.
+- When `pic_wakeup` is asserted without a simultaneous selected write, clear `dme` and `sme`.
+- `spr_dat_o` must read back the PMR fields and drive unused bits to zero.
+- `pm_clksd` equals `sdf`.
+- `pm_cpu_gate`, D-cache, I-cache, DMMU, and IMMU gate outputs assert when doze or sleep mode is enabled and `pic_wakeup` is low.
+- `pm_tt_gate` asserts only for sleep mode while `pic_wakeup` is low.
+- `pm_wakeup` follows `pic_wakeup`.
+- `pm_lvolt` asserts when the CPU is gated or `pm_cpustall` is asserted.

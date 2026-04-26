@@ -1,0 +1,20 @@
+Complete the missing rate decode section in the Verilog-2001 module below.
+
+This completion is derived from a legacy 802.11 L-SIG rate decode case. The
+missing section should decode the 4-bit rate field into `N_BPSC`, `N_DBPS`, and
+`RATE`.
+
+Return only the completed Verilog source.
+
+```verilog
+module dot11_tx_rate_decode(
+    input [3:0] bram_rate,
+    output reg [2:0] N_BPSC,
+    output reg [8:0] N_DBPS,
+    output reg [4:0] RATE
+);
+always @* begin
+    // FILL_MISSING_SECTION
+end
+endmodule
+```

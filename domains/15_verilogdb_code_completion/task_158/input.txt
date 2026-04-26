@@ -1,0 +1,37 @@
+Complete the missing two-stage SDRAM/Wishbone crossing registers.
+
+This completion is derived from a two-stage SDRAM-clocked request register
+path. The missing code should reset and transfer Wishbone request fields into
+stage 1, then into stage 2.
+
+Return only the completed Verilog source.
+
+```verilog
+module tessera_sdram_req_sync(
+    input sys_sdram_clk,
+    input sys_sdram_res,
+    input wbif_write_req,
+    input [3:0] wbif_write_byte,
+    input [31:0] wbif_write_address,
+    input [31:0] wbif_write_data,
+    input wbif_read_req,
+    input [3:0] wbif_read_byte,
+    input [31:0] wbif_read_address,
+    output reg mt1_write_req,
+    output reg [3:0] mt1_write_byte,
+    output reg [31:0] mt1_write_address,
+    output reg [31:0] mt1_write_data,
+    output reg mt1_read_req,
+    output reg [3:0] mt1_read_byte,
+    output reg [31:0] mt1_read_address,
+    output reg mt2_write_req,
+    output reg [3:0] mt2_write_byte,
+    output reg [31:0] mt2_write_address,
+    output reg [31:0] mt2_write_data,
+    output reg mt2_read_req,
+    output reg [3:0] mt2_read_byte,
+    output reg [31:0] mt2_read_address
+);
+// FILL_MISSING_SECTION
+endmodule
+```

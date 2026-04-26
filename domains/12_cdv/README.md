@@ -1,7 +1,10 @@
-# Coverage-Driven Verification Benchmark
+# Iterative Agentic Benchmark
 
-This directory adds an agentic coverage-closure benchmark flow on top of the
-existing single-shot RTL tasks.
+This directory adds agentic benchmark tasks on top of the existing single-shot
+RTL tasks. The command API remains `prepare`, `run`, and `status`.
+
+Some tasks are coverage-closure tasks. Others are iterative RTL analysis tasks
+that score objective bins through the same report schema.
 
 ## Workflow
 
@@ -49,7 +52,7 @@ python3 domains/12_cdv/runner.py status tmp/cdv_queue_credit
   - a stability penalty if replayed runs disagree
   - zero score if the test itself fails
 
-## Sample Task
+## Sample Tasks
 
 `task_121` provides:
 
@@ -57,3 +60,10 @@ python3 domains/12_cdv/runner.py status tmp/cdv_queue_credit
 - A protected cocotb harness and `cocotb-coverage` model.
 - One weak editable baseline sequence file.
 - A target of `>= 90%` coverage within `6` iterations.
+
+VerilogDB-derived agentic tasks:
+
+- `task_122`: `alloc_two` static RTL analysis.
+- `task_123`: `top_dec` router pipeline analysis.
+- `task_124`: `smii_txrx` protocol analysis.
+- `task_125`: `bch_sigma_bma_serial` dependency/algorithm analysis.

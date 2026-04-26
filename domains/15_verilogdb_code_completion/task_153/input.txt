@@ -1,0 +1,33 @@
+Complete the missing debug counter and TDO mux section in the Verilog-2001
+module below.
+
+This completion is derived from debug-interface bit counter, word counter, and
+TDO output mux logic.
+
+Return only the completed Verilog source.
+
+```verilog
+module adv_dbg_if_wb_cpu0_or1k_counter_mux(
+    input tck_i,
+    input rst_i,
+    input bit_ct_rst,
+    input bit_ct_en,
+    input [5:0] word_size_bits,
+    input word_ct_en,
+    input word_ct_sel,
+    input [15:0] count_data_in,
+    input [1:0] tdo_output_sel,
+    input [31:0] data_out_shift_reg,
+    input biu_ready,
+    input crc_match,
+    input crc_serial_out,
+    output reg [5:0] bit_count,
+    output reg [15:0] word_count,
+    output bit_count_max,
+    output bit_count_32,
+    output word_count_zero,
+    output reg module_tdo_o
+);
+// FILL_MISSING_SECTION
+endmodule
+```
