@@ -128,7 +128,7 @@ List available tasks:
 Run a single task through an OpenAI-compatible API:
 
 ```bash
-.venv/bin/python -m benchmark_runner run task_80 --model gpt-4o-mini
+.venv/bin/python -m benchmark_runner run task_80 --model mistral-medium-latest
 ```
 
 Results, prompts, model responses, generated files, and reports are written

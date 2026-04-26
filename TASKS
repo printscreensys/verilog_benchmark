@@ -31,7 +31,7 @@ task_124 [cdv] (domains/12_cdv/tasks/task_124) - SMII TX/RX Protocol Analysis
 task_125 [cdv] (domains/12_cdv/tasks/task_125) - BCH BMA Serial Dependency Analysis
 task_130 [rtl_generation] (domains/03_low_power_design/task_130) - Design a Verilog-2001 module named `or1200_pm` that implements the OR1200 power-management block.
 task_131 [rtl_generation] (domains/04_chiplet_die_to_die_integration/task_131) - Design a standalone Verilog-2001 module named `alloc_two`.
-task_140 [rtl_description] (domains/08_spec_clarification/task_140) - Describe what the provided Verilog module does.
+task_81 [rtl_description] (domains/08_spec_clarification/task_81) - Describe what the provided Verilog module does.
 task_150 [code_completion] (domains/15_verilogdb_code_completion/task_150) - Complete the missing LDPC tail VNU index mapping section.
 task_151 [code_completion] (domains/15_verilogdb_code_completion/task_151) - Complete the missing JTAG TAP next-state table section.
 task_152 [code_completion] (domains/15_verilogdb_code_completion/task_152) - Complete the missing legacy L-SIG rate decode section.
