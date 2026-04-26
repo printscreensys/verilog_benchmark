@@ -1,0 +1,30 @@
+Coverage-driven RTL analysis task: close functional coverage for the protected
+`alloc_two` source in `rtl/alloc_two.v`.
+
+Rules:
+- You may edit only `tests/test_sequences.py`.
+- Do not modify the protected RTL, coverage model, harness, or support library.
+- Do not call coverage APIs directly from the editable file. Coverage must come
+  from observed RTL evidence through the provided helper functions.
+
+Goal:
+- Reach at least 90% functional coverage within 4 iterations.
+- Each iteration replays the same analysis twice. Flaky or nondeterministic
+  tests are penalized.
+
+Suggested workflow:
+1. Prepare a workspace:
+   `python3 domains/12_cdv/runner.py prepare task_122 <workspace>`
+2. Edit `<workspace>/tests/test_sequences.py`
+3. Run one iteration:
+   `python3 domains/12_cdv/runner.py run <workspace>`
+4. Inspect `<workspace>/.cdv/reports/iteration_XX/report.json`
+5. Repeat until the coverage target is met or the budget is exhausted.
+
+Expected analysis topics:
+- FIFO input handshake and `ready_o`.
+- X/Y route-ID extraction.
+- Direction-specific A/B routing for LEFT, RIGHT, UP, and DOWN.
+- Route lock behavior across multi-flit packets.
+- Tail-flit release condition.
+- Selected-output ready/valid behavior.

@@ -1,0 +1,22 @@
+Coverage-driven RTL analysis task: close functional coverage for the protected
+`bch_sigma_bma_serial` source in `rtl/bch_sigma_bma_serial.v`.
+
+Rules:
+- You may edit only `tests/test_sequences.py`.
+- Do not modify the protected RTL, coverage model, harness, or support library.
+- Do not call coverage APIs directly from the editable file. Coverage must come
+  from observed RTL evidence through the provided helper functions.
+
+Goal:
+- Reach at least 90% functional coverage within 4 iterations.
+- Each iteration replays the same analysis twice. Flaky or nondeterministic
+  tests are penalized.
+
+Expected analysis topics:
+- Serial Berlekamp-Massey/BCH sigma computation.
+- Required include/macros and parameter-derived widths.
+- Handshake behavior for `start`, `ready`, `busy`, `done`, `ack_done`.
+- Iteration counters and cycle marker registers.
+- Initial beta/dr values from `syn1`.
+- `bsel`, `err_count`, and beta/sigma update conditions.
+- External finite-field helper modules.

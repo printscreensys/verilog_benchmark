@@ -3,8 +3,10 @@
 This directory adds agentic benchmark tasks on top of the existing single-shot
 RTL tasks. The command API remains `prepare`, `run`, and `status`.
 
-Some tasks are coverage-closure tasks. Others are iterative RTL analysis tasks
-that score objective bins through the same report schema.
+Tasks share the same workspace structure: protected RTL, protected coverage
+model/harness/support files, and one editable `tests/test_sequences.py` file.
+Some tasks stimulate a simulated DUT; others close analysis-objective coverage
+by recording evidence found in protected RTL.
 
 ## Workflow
 
@@ -45,8 +47,8 @@ python3 domains/12_cdv/runner.py status tmp/cdv_queue_credit
   - only configured editable files may change
   - protected files are hash-checked before every run
   - editable files are scanned for forbidden coverage shortcuts
-- Runs the cocotb test twice per iteration to detect flaky or nondeterministic
-  tests.
+- Runs the task-local Makefile twice per iteration to detect flaky or
+  nondeterministic tests.
 - Scores the iteration with:
   - achieved functional coverage
   - a stability penalty if replayed runs disagree
@@ -67,3 +69,7 @@ VerilogDB-derived agentic tasks:
 - `task_123`: `top_dec` router pipeline analysis.
 - `task_124`: `smii_txrx` protocol analysis.
 - `task_125`: `bch_sigma_bma_serial` dependency/algorithm analysis.
+
+These tasks use the same file layout as `task_121`, but their harnesses inspect
+protected RTL and sample coverage objectives from observed source evidence
+instead of running a full Verilog simulation.
