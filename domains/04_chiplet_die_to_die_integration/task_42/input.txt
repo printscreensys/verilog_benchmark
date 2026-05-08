@@ -22,6 +22,12 @@ Interface:
 - Output B stream: `B_valid_o`, `B_ready_i`, `B_data_o[DATA_WIDTH-1:0]`.
 - Clock/reset: `clk`, active-low async reset `rstn`.
 
+Verilog-2001 net/reg constraints:
+- Declare signals driven by `assign` statements as `wire`, not `reg`.
+- Declare signals connected to submodule output ports as `wire`, not `reg`.
+- Declare `ready_o`, `A_valid_o`, `A_data_o`, `B_valid_o`, and `B_data_o` as `wire` if they are driven by continuous assignments.
+- Do not connect submodule output ports to variables assigned in procedural `always` blocks.
+
 Required behavior:
 - Push input flits into an internal FIFO when `valid_i && ready_o`.
 - `ready_o` is high when the FIFO is not full.
