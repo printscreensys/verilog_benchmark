@@ -645,7 +645,7 @@ def run_task(
     model: str,
     api_key: str | None = None,
     base_url: str | None = None,
-    temperature: float = 0.0,
+    temperature: float = 0.7,
     max_output_tokens: int | None = None,
     artifacts_root: str | Path | None = None,
     max_agent_iterations: int | None = None,
