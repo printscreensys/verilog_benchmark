@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import json
@@ -169,6 +170,93 @@ def _load_json(path: Path) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise ValueError(f"{path} does not contain a JSON object.")
     return data
+
+
+def _format_literal(value: Any) -> str:
+    return json.dumps(value, sort_keys=True)
+
+
+def _extract_list_constants(path: Path) -> dict[str, list[Any]]:
+    if not path.exists():
+        return {}
+
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    constants: dict[str, list[Any]] = {}
+    for node in tree.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        if len(node.targets) != 1 or not isinstance(node.targets[0], ast.Name):
+            continue
+        name = node.targets[0].id
+        if not name.endswith("_BINS"):
+            continue
+        try:
+            value = ast.literal_eval(node.value)
+        except (ValueError, SyntaxError):
+            continue
+        if isinstance(value, list):
+            constants[name] = value
+    return constants
+
+
+def _format_signature(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
+    args = node.args
+    parts: list[str] = []
+    positional = list(args.posonlyargs) + list(args.args)
+    defaults = [None] * (len(positional) - len(args.defaults)) + list(args.defaults)
+    for arg, default in zip(positional, defaults):
+        text = arg.arg
+        if default is not None:
+            try:
+                text += "=" + repr(ast.literal_eval(default))
+            except (ValueError, SyntaxError):
+                text += "=..."
+        parts.append(text)
+    if args.vararg:
+        parts.append("*" + args.vararg.arg)
+    elif args.kwonlyargs:
+        parts.append("*")
+    for arg, default in zip(args.kwonlyargs, args.kw_defaults):
+        text = arg.arg
+        if default is not None:
+            try:
+                text += "=" + repr(ast.literal_eval(default))
+            except (ValueError, SyntaxError):
+                text += "=..."
+        parts.append(text)
+    if args.kwarg:
+        parts.append("**" + args.kwarg.arg)
+    prefix = "async " if isinstance(node, ast.AsyncFunctionDef) else ""
+    return f"{prefix}{node.name}({', '.join(parts)})"
+
+
+def _extract_helper_signatures(path: Path) -> list[str]:
+    if not path.exists():
+        return []
+
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    public_names: set[str] | None = None
+    for node in tree.body:
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name) and target.id == "__all__":
+                    try:
+                        values = ast.literal_eval(node.value)
+                    except (ValueError, SyntaxError):
+                        values = None
+                    if isinstance(values, list):
+                        public_names = {str(value) for value in values}
+
+    signatures = []
+    for node in tree.body:
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if node.name.startswith("_"):
+            continue
+        if public_names is not None and node.name not in public_names:
+            continue
+        signatures.append(_format_signature(node))
+    return signatures
 
 
 def _summarize_cdv_report(report: dict[str, Any]) -> str:
@@ -433,6 +521,7 @@ class BenchmarkRunner:
                 for rel_path in editable_paths
             }
             prompt_text = self._build_cdv_prompt(
+                task_dir=task.task_dir,
                 task_prompt=task_prompt,
                 editable_paths=editable_paths,
                 current_files=current_files,
@@ -513,6 +602,7 @@ class BenchmarkRunner:
     def _build_cdv_prompt(
         self,
         *,
+        task_dir: Path,
         task_prompt: str,
         editable_paths: list[str],
         current_files: dict[str, str],
@@ -520,6 +610,9 @@ class BenchmarkRunner:
         iteration: int,
         iteration_budget: int,
     ) -> str:
+        coverage_bins = _extract_list_constants(task_dir / "tests" / "coverage_model.py")
+        helper_signatures = _extract_helper_signatures(task_dir / "tests" / "test_support.py")
+
         sections = [
             f"Iteration {iteration} of {iteration_budget}.",
             "Task specification:",
@@ -528,11 +621,42 @@ class BenchmarkRunner:
             "Allowed editable files:",
             "\n".join(f"- {path}" for path in editable_paths),
             "",
-            "Return JSON only with this schema:",
-            '{"files": [{"path": "relative/path.py", "content": "full file contents"}], "summary": "optional"}',
-            "",
-            "Current editable file contents:",
+            "Coverage model summary:",
         ]
+
+        if coverage_bins:
+            for name, values in sorted(coverage_bins.items()):
+                sections.append(f"- {name}: {_format_literal(values)}")
+        else:
+            sections.append("- No coverage bin constants were discovered.")
+
+        sections.extend(
+            [
+                "",
+                "Available helper API:",
+            ]
+        )
+        if helper_signatures:
+            sections.extend(f"- {signature}" for signature in helper_signatures)
+        else:
+            sections.append("- No helper signatures were discovered.")
+
+        sections.extend(
+            [
+                "",
+                "Important CDV constraints:",
+                "- Return the full replacement contents for each edited file, not a patch.",
+                "- Preserve previously working coverage behavior when adding new coverage.",
+                "- Use only the helper API listed above.",
+                "- If OBJECTIVE_BINS is listed, observe() may use only those exact objective names.",
+                "- Do not invent coverage bin names, helper names, signal names, or out-of-range helper arguments.",
+                "",
+                "Return JSON only with this schema:",
+                '{"files": [{"path": "relative/path.py", "content": "full file contents"}], "summary": "optional"}',
+                "",
+                "Current editable file contents:",
+            ]
+        )
 
         for rel_path, contents in current_files.items():
             sections.extend(

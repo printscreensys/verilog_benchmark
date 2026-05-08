@@ -950,6 +950,8 @@ def _load_area_and_timing_config(timing_spec_file, reference_verilog_file):
         "clock_port": None,
         "opensta_docker_image": DEFAULT_OPENSTA_IMAGE,
         "opensta_liberty_file": None,
+        "timing_target_ns": None,
+        "area_target_um2": None,
     }
 
     if timing_spec_file is not None and Path(timing_spec_file).exists():
@@ -966,6 +968,10 @@ def _load_area_and_timing_config(timing_spec_file, reference_verilog_file):
             config["opensta_docker_image"] = str(spec["opensta_docker_image"])
         if spec.get("opensta_liberty_file"):
             config["opensta_liberty_file"] = str(spec["opensta_liberty_file"])
+        if spec.get("timing_target_ns") is not None:
+            config["timing_target_ns"] = float(spec["timing_target_ns"])
+        if spec.get("area_target_um2") is not None:
+            config["area_target_um2"] = float(spec["area_target_um2"])
 
     if config["top_module"] is None:
         with open(reference_verilog_file, "r", encoding="utf-8") as handle:
@@ -1171,14 +1177,24 @@ def _parse_yosys_stat_report(path):
         report_text,
         flags=re.M,
     )
-    if area_match is None:
-        raise ValueError(f"Yosys stats report {path} does not contain a chip area line.")
-
     cell_match = re.search(
         r"^\s*Number of cells:\s*(\d+)\s*$",
         report_text,
         flags=re.M,
     )
+    if cell_match is None:
+        cell_match = re.search(
+            r"^\s*(\d+)\s+(?:[-+0-9.Ee]+|-)?\s*cells\s*$",
+            report_text,
+            flags=re.M,
+        )
+
+    if area_match is None:
+        instance_count = int(cell_match.group(1)) if cell_match is not None else 0
+        if instance_count == 0:
+            return 0.0, 0
+        raise ValueError(f"Yosys stats report {path} does not contain a chip area line.")
+
     if cell_match is None:
         raise ValueError(f"Yosys stats report {path} does not contain a cell count line.")
 
@@ -1607,19 +1623,24 @@ def run_optional_timing_check(verilog_file, timing_spec_file, reference_verilog_
         result_metrics["area_and_timings"]["constraints_source"] = str(reference_verilog_file)
         return result_metrics
 
+    area_target_um2 = (
+        config.get("area_target_um2")
+        if config.get("area_target_um2") is not None
+        else reference_analysis.get("area_um2")
+    )
+    timing_target_ns = (
+        config.get("timing_target_ns")
+        if config.get("timing_target_ns") is not None
+        else reference_analysis.get("timing_ns")
+    )
+
     area_met = None
-    if (
-        candidate_analysis.get("area_um2") is not None
-        and reference_analysis.get("area_um2") is not None
-    ):
-        area_met = candidate_analysis["area_um2"] <= reference_analysis["area_um2"]
+    if candidate_analysis.get("area_um2") is not None and area_target_um2 is not None:
+        area_met = candidate_analysis["area_um2"] <= area_target_um2
 
     timing_met = None
-    if (
-        candidate_analysis.get("timing_ns") is not None
-        and reference_analysis.get("timing_ns") is not None
-    ):
-        timing_met = candidate_analysis["timing_ns"] <= reference_analysis["timing_ns"]
+    if candidate_analysis.get("timing_ns") is not None and timing_target_ns is not None:
+        timing_met = candidate_analysis["timing_ns"] <= timing_target_ns
 
     constraints_met = None
     if area_met is not None and timing_met is not None:
@@ -1660,21 +1681,21 @@ def run_optional_timing_check(verilog_file, timing_spec_file, reference_verilog_
                 "opensta_image_available": candidate_analysis.get("opensta_image_available"),
                 "top_module": config["top_module"],
                 "timing_ns": candidate_analysis.get("timing_ns"),
-                "timing_target_ns": reference_analysis.get("timing_ns"),
+                "timing_target_ns": timing_target_ns,
                 "timing_margin_ns": (
                     None
                     if candidate_analysis.get("timing_ns") is None
-                    or reference_analysis.get("timing_ns") is None
-                    else round(reference_analysis["timing_ns"] - candidate_analysis["timing_ns"], 4)
+                    or timing_target_ns is None
+                    else round(timing_target_ns - candidate_analysis["timing_ns"], 4)
                 ),
                 "timing_met": timing_met,
                 "area_um2": candidate_analysis.get("area_um2"),
-                "area_target_um2": reference_analysis.get("area_um2"),
+                "area_target_um2": area_target_um2,
                 "area_margin_um2": (
                     None
                     if candidate_analysis.get("area_um2") is None
-                    or reference_analysis.get("area_um2") is None
-                    else round(reference_analysis["area_um2"] - candidate_analysis["area_um2"], 4)
+                    or area_target_um2 is None
+                    else round(area_target_um2 - candidate_analysis["area_um2"], 4)
                 ),
                 "area_met": area_met,
                 "instance_count": candidate_analysis.get("instance_count"),
