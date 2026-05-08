@@ -172,14 +172,38 @@ def _metric_pass_count(samples: list[RunSample], metric_key: str) -> int:
     return sum(1 for sample in samples if sample.evaluation.get(metric_key) is True)
 
 
+def _build_metric_pass_at_k_values(
+    *,
+    tasks: list[ReportTask],
+    models: list[str],
+    selected_runs: dict[str, dict[str, list[RunSample]]],
+    metrics: tuple[tuple[str, str], ...],
+    k: int,
+) -> dict[str, dict[str, float | None]]:
+    values: dict[str, dict[str, float | None]] = {}
+    for model in models:
+        values[model] = {}
+        for metric_key, _label in metrics:
+            problems: list[tuple[int, int]] = []
+            for task in tasks:
+                task_samples = selected_runs.get(model, {}).get(task.task_id, [])
+                if not task_samples:
+                    continue
+                attempts = len(task_samples)
+                successes = _metric_pass_count(task_samples, metric_key)
+                problems.append((attempts, successes))
+            values[model][metric_key] = mean_pass_at_k(problems, k) if problems else None
+    return values
+
+
 def _render_table(
     *,
     tasks: list[ReportTask],
     models: list[str],
     selected_runs: dict[str, dict[str, list[RunSample]]],
     metrics: tuple[tuple[str, str], ...],
-    include_pass_at_k: bool,
-    pass_at_k_values: dict[str, float | None],
+    pass_at_k_values: dict[str, dict[str, float | None]],
+    pass_at_k_label: str,
 ) -> str:
     lines = [
         "<table>",
@@ -215,14 +239,15 @@ def _render_table(
                 lines.append(f"      <td>{_metric_pass_count(task_samples, metric_key)}</td>")
         lines.append("    </tr>")
 
-    if include_pass_at_k:
-        lines.append("    <tr>")
-        lines.append("      <td>pass@k</td>")
-        for model in models:
-            value = pass_at_k_values.get(model)
+    lines.append("    <tr>")
+    lines.append(f"      <td>{html.escape(pass_at_k_label)}</td>")
+    for model in models:
+        model_values = pass_at_k_values.get(model, {})
+        for metric_key, _label in metrics:
+            value = model_values.get(metric_key)
             rendered_value = "n/a" if value is None else f"{value:.4f}"
-            lines.append(f'      <td colspan="{len(metrics)}">{rendered_value}</td>')
-        lines.append("    </tr>")
+            lines.append(f"      <td>{rendered_value}</td>")
+    lines.append("    </tr>")
 
     lines.extend(
         [
@@ -261,17 +286,20 @@ def generate_report(
         return f"No benchmark results found under {artifacts_root_path.as_posix()}."
 
     tasks = _build_report_tasks(task_ids)
-    pass_at_k_values: dict[str, float | None] = {}
-    for model in models:
-        problems: list[tuple[int, int]] = []
-        for task in tasks:
-            task_samples = selected_runs.get(model, {}).get(task.task_id, [])
-            if not task_samples:
-                continue
-            attempts = len(task_samples)
-            successes = sum(1 for sample in task_samples if sample.benchmark_pass)
-            problems.append((attempts, successes))
-        pass_at_k_values[model] = mean_pass_at_k(problems, k) if problems else None
+    first_table_pass_at_k = _build_metric_pass_at_k_values(
+        tasks=tasks,
+        models=models,
+        selected_runs=selected_runs,
+        metrics=FIRST_TABLE_METRICS,
+        k=k,
+    )
+    second_table_pass_at_k = _build_metric_pass_at_k_values(
+        tasks=tasks,
+        models=models,
+        selected_runs=selected_runs,
+        metrics=SECOND_TABLE_METRICS,
+        k=k,
+    )
 
     latest_sample_count = max(len(samples) for task_runs in selected_runs.values() for samples in task_runs.values())
     subtitle = f"_latest samples per task = up to {n}, pass@{k}, observed max samples = {latest_sample_count}_"
@@ -284,8 +312,8 @@ def generate_report(
             models=models,
             selected_runs=selected_runs,
             metrics=FIRST_TABLE_METRICS,
-            include_pass_at_k=True,
-            pass_at_k_values=pass_at_k_values,
+            pass_at_k_values=first_table_pass_at_k,
+            pass_at_k_label=f"pass@{k}",
         ),
         "",
         "### Area and timing",
@@ -295,8 +323,8 @@ def generate_report(
             models=models,
             selected_runs=selected_runs,
             metrics=SECOND_TABLE_METRICS,
-            include_pass_at_k=False,
-            pass_at_k_values=pass_at_k_values,
+            pass_at_k_values=second_table_pass_at_k,
+            pass_at_k_label=f"pass@{k}",
         ),
     ]
     return "\n".join(sections)
