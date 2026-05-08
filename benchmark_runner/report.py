@@ -38,6 +38,14 @@ class RunSample:
 
 
 @dataclass(frozen=True)
+class CdvRunSample:
+    benchmark_pass: bool
+    final_report: dict[str, Any]
+    path: Path
+    sort_key: str
+
+
+@dataclass(frozen=True)
 class ReportTask:
     task_id: str
     label: str
@@ -138,11 +146,45 @@ def _discover_runs(artifacts_root: Path) -> dict[str, dict[str, list[RunSample]]
     return discovered
 
 
+def _discover_cdv_runs(artifacts_root: Path) -> dict[str, dict[str, list[CdvRunSample]]]:
+    discovered: dict[str, dict[str, list[CdvRunSample]]] = {}
+    if not artifacts_root.exists():
+        return discovered
+
+    for path in artifacts_root.rglob("results.json"):
+        payload = _load_json(path)
+        if payload.get("task_kind") != "cdv":
+            continue
+
+        task_id = payload.get("task_id")
+        if not isinstance(task_id, str) or not task_id.strip():
+            continue
+
+        final_report = payload.get("final_report")
+        if not isinstance(final_report, dict):
+            continue
+
+        model = _normalize_model_name(payload, path, artifacts_root)
+        sample = CdvRunSample(
+            benchmark_pass=bool(payload.get("benchmark_pass")),
+            final_report=final_report,
+            path=path,
+            sort_key=_result_sort_key(payload, path),
+        )
+        discovered.setdefault(model, {}).setdefault(task_id, []).append(sample)
+
+    for task_runs in discovered.values():
+        for samples in task_runs.values():
+            samples.sort(key=lambda item: (item.sort_key, item.path.as_posix()))
+
+    return discovered
+
+
 def _select_latest_runs(
-    discovered: dict[str, dict[str, list[RunSample]]],
+    discovered,
     sample_count: int,
-) -> dict[str, dict[str, list[RunSample]]]:
-    selected: dict[str, dict[str, list[RunSample]]] = {}
+):
+    selected = {}
     for model, task_runs in discovered.items():
         selected[model] = {}
         for task_id, samples in task_runs.items():
@@ -160,6 +202,25 @@ def _build_report_tasks(task_ids: set[str]) -> list[ReportTask]:
         if task.task_id not in remaining:
             continue
         report_tasks.append(ReportTask(task_id=task.task_id, label=_task_label(task)))
+        remaining.remove(task.task_id)
+
+    for task_id in sorted(remaining):
+        report_tasks.append(ReportTask(task_id=task_id, label=task_id))
+
+    return report_tasks
+
+
+def _build_cdv_report_tasks(task_ids: set[str]) -> list[ReportTask]:
+    remaining = set(task_ids)
+    report_tasks: list[ReportTask] = []
+
+    for task in list_tasks():
+        if task.task_kind != "cdv":
+            continue
+        if task.task_id not in remaining:
+            continue
+        label = f"{task.task_id} ({task.title})" if task.title else task.task_id
+        report_tasks.append(ReportTask(task_id=task.task_id, label=label))
         remaining.remove(task.task_id)
 
     for task_id in sorted(remaining):
@@ -258,6 +319,116 @@ def _render_table(
     return "\n".join(lines)
 
 
+def _cdv_mean(samples: list[CdvRunSample], metric_key: str) -> float | None:
+    values = [
+        float(sample.final_report[metric_key])
+        for sample in samples
+        if sample.final_report.get(metric_key) is not None
+    ]
+    if not values:
+        return None
+    return sum(values) / len(values)
+
+
+def _cdv_pass_count(samples: list[CdvRunSample], metric_key: str) -> int:
+    return sum(1 for sample in samples if sample.final_report.get(metric_key) is True)
+
+
+def _cdv_pass_at_k_values(
+    *,
+    tasks: list[ReportTask],
+    models: list[str],
+    selected_runs: dict[str, dict[str, list[CdvRunSample]]],
+    metrics: tuple[str, ...],
+    k: int,
+) -> dict[str, dict[str, float | None]]:
+    values: dict[str, dict[str, float | None]] = {}
+    for model in models:
+        values[model] = {}
+        for metric_key in metrics:
+            problems: list[tuple[int, int]] = []
+            for task in tasks:
+                task_samples = selected_runs.get(model, {}).get(task.task_id, [])
+                if not task_samples:
+                    continue
+                attempts = len(task_samples)
+                successes = _cdv_pass_count(task_samples, metric_key)
+                problems.append((attempts, successes))
+            values[model][metric_key] = mean_pass_at_k(problems, k) if problems else None
+    return values
+
+
+def _render_cdv_table(
+    *,
+    tasks: list[ReportTask],
+    models: list[str],
+    selected_runs: dict[str, dict[str, list[CdvRunSample]]],
+    pass_at_k_values: dict[str, dict[str, float | None]],
+    pass_at_k_label: str,
+) -> str:
+    columns = ("coverage", "goal", "tests", "stable", "score")
+    lines = [
+        "<table>",
+        "  <thead>",
+        "    <tr>",
+        '      <th rowspan="2">task</th>',
+    ]
+    for model in models:
+        lines.append(f'      <th colspan="{len(columns)}">{html.escape(model)}</th>')
+    lines.extend(
+        [
+            "    </tr>",
+            "    <tr>",
+        ]
+    )
+    for _model in models:
+        for label in columns:
+            lines.append(f"      <th>{html.escape(label)}</th>")
+    lines.extend(
+        [
+            "    </tr>",
+            "  </thead>",
+            "  <tbody>",
+        ]
+    )
+
+    for task in tasks:
+        lines.append("    <tr>")
+        lines.append(f"      <td>{html.escape(task.label)}</td>")
+        for model in models:
+            task_samples = selected_runs.get(model, {}).get(task.task_id, [])
+            coverage = _cdv_mean(task_samples, "coverage_percent")
+            score = _cdv_mean(task_samples, "score")
+            lines.append(f"      <td>{'n/a' if coverage is None else f'{coverage:.2f}'}</td>")
+            lines.append(f"      <td>{_cdv_pass_count(task_samples, 'goal_met')}</td>")
+            lines.append(f"      <td>{_cdv_pass_count(task_samples, 'tests_passed')}</td>")
+            lines.append(f"      <td>{_cdv_pass_count(task_samples, 'stable')}</td>")
+            lines.append(f"      <td>{'n/a' if score is None else f'{score:.2f}'}</td>")
+        lines.append("    </tr>")
+
+    lines.append("    <tr>")
+    lines.append(f"      <td>{html.escape(pass_at_k_label)}</td>")
+    for model in models:
+        model_values = pass_at_k_values.get(model, {})
+        goal_value = model_values.get("goal_met")
+        tests_value = model_values.get("tests_passed")
+        stable_value = model_values.get("stable")
+        lines.append("      <td>n/a</td>")
+        lines.append(f"      <td>{'n/a' if goal_value is None else f'{goal_value:.4f}'}</td>")
+        lines.append(f"      <td>{'n/a' if tests_value is None else f'{tests_value:.4f}'}</td>")
+        lines.append(f"      <td>{'n/a' if stable_value is None else f'{stable_value:.4f}'}</td>")
+        lines.append("      <td>n/a</td>")
+    lines.append("    </tr>")
+
+    lines.extend(
+        [
+            "  </tbody>",
+            "</table>",
+        ]
+    )
+    return "\n".join(lines)
+
+
 def generate_report(
     *,
     artifacts_root: str | Path = DEFAULT_REPORT_ARTIFACTS_ROOT,
@@ -271,21 +442,30 @@ def generate_report(
 
     artifacts_root_path = Path(artifacts_root)
     discovered_runs = _discover_runs(artifacts_root_path)
-    if not discovered_runs:
+    discovered_cdv_runs = _discover_cdv_runs(artifacts_root_path)
+    if not discovered_runs and not discovered_cdv_runs:
         return f"No benchmark results found under {artifacts_root_path.as_posix()}."
 
     selected_runs = _select_latest_runs(discovered_runs, n)
-    models = sorted(selected_runs)
+    selected_cdv_runs = _select_latest_runs(discovered_cdv_runs, n)
+    models = sorted(set(selected_runs) | set(selected_cdv_runs))
     task_ids = {
         task_id
         for task_runs in selected_runs.values()
         for task_id, samples in task_runs.items()
         if samples
     }
-    if not task_ids:
+    cdv_task_ids = {
+        task_id
+        for task_runs in selected_cdv_runs.values()
+        for task_id, samples in task_runs.items()
+        if samples
+    }
+    if not task_ids and not cdv_task_ids:
         return f"No benchmark results found under {artifacts_root_path.as_posix()}."
 
     tasks = _build_report_tasks(task_ids)
+    cdv_tasks = _build_cdv_report_tasks(cdv_task_ids)
     first_table_pass_at_k = _build_metric_pass_at_k_values(
         tasks=tasks,
         models=models,
@@ -300,31 +480,65 @@ def generate_report(
         metrics=SECOND_TABLE_METRICS,
         k=k,
     )
+    cdv_pass_at_k = _cdv_pass_at_k_values(
+        tasks=cdv_tasks,
+        models=models,
+        selected_runs=selected_cdv_runs,
+        metrics=("goal_met", "tests_passed", "stable"),
+        k=k,
+    )
 
-    latest_sample_count = max(len(samples) for task_runs in selected_runs.values() for samples in task_runs.values())
+    latest_sample_count = max(
+        [
+            len(samples)
+            for task_runs in list(selected_runs.values()) + list(selected_cdv_runs.values())
+            for samples in task_runs.values()
+        ],
+        default=0,
+    )
     subtitle = f"_latest samples per task = up to {n}, pass@{k}, observed max samples = {latest_sample_count}_"
 
-    sections = [
-        "### Syntax and functional correctness",
-        subtitle,
-        _render_table(
-            tasks=tasks,
-            models=models,
-            selected_runs=selected_runs,
-            metrics=FIRST_TABLE_METRICS,
-            pass_at_k_values=first_table_pass_at_k,
-            pass_at_k_label=f"pass@{k}",
-        ),
-        "",
-        "### Area and timing",
-        subtitle,
-        _render_table(
-            tasks=tasks,
-            models=models,
-            selected_runs=selected_runs,
-            metrics=SECOND_TABLE_METRICS,
-            pass_at_k_values=second_table_pass_at_k,
-            pass_at_k_label=f"pass@{k}",
-        ),
-    ]
+    sections = []
+    if tasks:
+        sections.extend(
+            [
+                "### Syntax and functional correctness",
+                subtitle,
+                _render_table(
+                    tasks=tasks,
+                    models=models,
+                    selected_runs=selected_runs,
+                    metrics=FIRST_TABLE_METRICS,
+                    pass_at_k_values=first_table_pass_at_k,
+                    pass_at_k_label=f"pass@{k}",
+                ),
+                "",
+                "### Area and timing",
+                subtitle,
+                _render_table(
+                    tasks=tasks,
+                    models=models,
+                    selected_runs=selected_runs,
+                    metrics=SECOND_TABLE_METRICS,
+                    pass_at_k_values=second_table_pass_at_k,
+                    pass_at_k_label=f"pass@{k}",
+                ),
+            ]
+        )
+    if cdv_tasks:
+        if sections:
+            sections.append("")
+        sections.extend(
+            [
+                "### CDV coverage",
+                subtitle,
+                _render_cdv_table(
+                    tasks=cdv_tasks,
+                    models=models,
+                    selected_runs=selected_cdv_runs,
+                    pass_at_k_values=cdv_pass_at_k,
+                    pass_at_k_label=f"pass@{k}",
+                ),
+            ]
+        )
     return "\n".join(sections)
