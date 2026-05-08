@@ -143,6 +143,6 @@ Generate a Markdown summary from the latest benchmark runs:
 ```
 
 This scans `tmp/llm_runs/`, groups runs by model, counts metric passes from the
-latest `n` attempts per task, adds a mean `pass@k` row for each model, and
-writes the markdown report to `reports/report_<timestamp>.md`. Use `--output`
-to override the default path.
+latest `n` attempts per task, adds mean `pass@k` rows for each model and metric,
+and writes the markdown report to `reports/report_<timestamp>.md`. Use
+`--output` to override the default path.

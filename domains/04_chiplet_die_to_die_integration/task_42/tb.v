@@ -1,4 +1,19 @@
 `timescale 1ns/1ps
+`ifndef DATA_WIDTH
+`define DATA_WIDTH 32
+`endif
+`ifndef RTID_L
+`define RTID_L 8
+`endif
+`ifndef RTID_H
+`define RTID_H 15
+`endif
+`ifndef LEFT
+`define LEFT 0
+`endif
+`ifndef TAIL
+`define TAIL 2'b10
+`endif
 
 module tb;
   reg clk = 0;

@@ -2,6 +2,16 @@ Design a standalone Verilog-2001 module named `alloc_two`.
 
 This module is a two-output channel allocator for a NoC input port. Include all needed macro definitions and a small FIFO module named `fifo_NoD_wrapper` so the answer compiles standalone.
 
+Use these exact macro names and values in the returned source:
+- `DATA_WIDTH` = 32
+- `RTID_L` = 8
+- `RTID_H` = 15
+- `LEFT` = 0
+- `RIGHT` = 1
+- `UP` = 2
+- `DOWN` = 3
+- `TAIL` = 2'b10
+
 Parameters:
 - `CHANNEL_ID`: one of `LEFT`, `RIGHT`, `UP`, `DOWN`.
 - `ROUTER_ID_X`, `ROUTER_ID_Y`: current router coordinates.
