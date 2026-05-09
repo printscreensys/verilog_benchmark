@@ -147,3 +147,7 @@ latest `n` attempts per task, adds mean `pass@k` rows for each model and metric,
 adds a separate CDV coverage section when agentic CDV runs are present, and
 writes the markdown report to `reports/report_<timestamp>.md`. Use `--output`
 to override the default path.
+
+In the area/timing table, `synthesizable` is counted only when the attempt also
+passes benchmark syntax. `area` and `timing` are counted only when the attempt
+passes benchmark syntax, synthesis sanity, and the corresponding constraint.

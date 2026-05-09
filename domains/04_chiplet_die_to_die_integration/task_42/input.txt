@@ -31,6 +31,12 @@ Verilog-2001 net/reg constraints:
 Required behavior:
 - Push input flits into an internal FIFO when `valid_i && ready_o`.
 - `ready_o` is high when the FIFO is not full.
+- Use this exact flit layout:
+  - bits `[DATA_WIDTH-1:DATA_WIDTH-2]` are the 2-bit flit type.
+  - a tail flit has `data[DATA_WIDTH-1:DATA_WIDTH-2] == TAIL`.
+  - bits `[RTID_H:RTID_L]` are the 8-bit route ID.
+  - route ID bits `[7:4]` are destination X.
+  - route ID bits `[3:0]` are destination Y.
 - Extract route ID bits from each flit and split them into destination X and Y coordinates.
 - For `LEFT`, A means destination Y is greater than `ROUTER_ID_Y`; B means equal Y.
 - For `RIGHT`, A means destination Y is less than `ROUTER_ID_Y`; B means equal Y.
@@ -39,4 +45,4 @@ Required behavior:
 - At packet head, choose A/B from the current flit route. Once any flit fires, lock that choice until a tail flit fires.
 - A flit fires on an output when that output valid and ready are both high.
 - Drive `fifo_ready` from the selected output ready signal.
-- Both output data buses mirror the current FIFO output flit.
+- Both output data buses always mirror the current FIFO output flit, even when the corresponding valid signal is low.

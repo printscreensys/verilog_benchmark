@@ -60,12 +60,11 @@ def _load_json(path: Path) -> dict[str, Any]:
 
 
 def _task_module_name(task: BenchmarkTask) -> str | None:
-    reference_file = task.task_dir / "ref.v"
-    if reference_file.exists():
-        reference_text = reference_file.read_text(encoding="utf-8")
-        match = MODULE_NAME_PATTERNS[0].search(reference_text)
-        if match:
-            return match.group(1)
+    if task.timing_spec_file is not None and task.timing_spec_file.exists():
+        timing_spec = _load_json(task.timing_spec_file)
+        top_module = timing_spec.get("top_module")
+        if isinstance(top_module, str) and top_module.strip():
+            return top_module.strip()
 
     title = task.title or ""
     for pattern in MODULE_NAME_PATTERNS[1:]:
@@ -76,6 +75,13 @@ def _task_module_name(task: BenchmarkTask) -> str | None:
     input_text = task.input_file.read_text(encoding="utf-8")
     for pattern in MODULE_NAME_PATTERNS[1:]:
         match = pattern.search(input_text)
+        if match:
+            return match.group(1)
+
+    reference_file = task.task_dir / "ref.v"
+    if reference_file.exists():
+        reference_text = reference_file.read_text(encoding="utf-8")
+        match = MODULE_NAME_PATTERNS[0].search(reference_text)
         if match:
             return match.group(1)
 
@@ -230,7 +236,22 @@ def _build_cdv_report_tasks(task_ids: set[str]) -> list[ReportTask]:
 
 
 def _metric_pass_count(samples: list[RunSample], metric_key: str) -> int:
-    return sum(1 for sample in samples if sample.evaluation.get(metric_key) is True)
+    return sum(1 for sample in samples if _metric_passed(sample, metric_key))
+
+
+def _metric_passed(sample: RunSample, metric_key: str) -> bool:
+    if metric_key == "synth_check_passed":
+        return (
+            sample.evaluation.get("syntax_correct") is True
+            and sample.evaluation.get("synth_check_passed") is True
+        )
+    if metric_key in {"area_constraints_met", "timing_constraints_met"}:
+        return (
+            sample.evaluation.get("syntax_correct") is True
+            and sample.evaluation.get("synth_check_passed") is True
+            and sample.evaluation.get(metric_key) is True
+        )
+    return sample.evaluation.get(metric_key) is True
 
 
 def _build_metric_pass_at_k_values(
