@@ -96,10 +96,6 @@ def _task_label(task: BenchmarkTask) -> str:
 
 
 def _normalize_model_name(payload: dict[str, Any], path: Path, artifacts_root: Path) -> str:
-    model = payload.get("model")
-    if isinstance(model, str) and model.strip():
-        return model.strip()
-
     try:
         relative_parts = path.relative_to(artifacts_root).parts
     except ValueError:
@@ -107,6 +103,10 @@ def _normalize_model_name(payload: dict[str, Any], path: Path, artifacts_root: P
 
     if len(relative_parts) >= 4 and relative_parts[0] and not relative_parts[0].startswith("task_"):
         return relative_parts[0]
+
+    model = payload.get("model")
+    if isinstance(model, str) and model.strip():
+        return model.strip()
 
     return "unknown_model"
 
