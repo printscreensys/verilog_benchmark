@@ -28,6 +28,7 @@ class PausedOpenAICompatibleLLM(OpenAICompatibleLLM):
         *,
         temperature: float | None = None,
         max_output_tokens: int | None = None,
+        reasoning_effort: str | None = None,
     ) -> dict[str, Any]:
         if self._last_request_monotonic is not None and self.pause_seconds > 0:
             elapsed = time.monotonic() - self._last_request_monotonic
@@ -40,6 +41,7 @@ class PausedOpenAICompatibleLLM(OpenAICompatibleLLM):
                 messages,
                 temperature=temperature,
                 max_output_tokens=max_output_tokens,
+                reasoning_effort=reasoning_effort,
             )
         finally:
             self._last_request_monotonic = time.monotonic()
@@ -61,6 +63,7 @@ def run_all_tasks_sequentially(
     base_url: str | None = None,
     temperature: float = 0.0,
     max_output_tokens: int | None = None,
+    reasoning_effort: str = "none",
     artifacts_root: str | Path = "tmp/llm_runs",
     max_agent_iterations: int | None = None,
     pause_seconds: float = DEFAULT_PAUSE_SECONDS,
@@ -74,6 +77,7 @@ def run_all_tasks_sequentially(
             base_url=base_url,
             temperature=temperature,
             max_output_tokens=max_output_tokens,
+            reasoning_effort=reasoning_effort,
         ),
         pause_seconds=pause_seconds,
     )
@@ -127,6 +131,7 @@ def run_all_tasks_sequentially(
         "started_at": started_at,
         "finished_at": _utc_timestamp(),
         "pause_seconds": max(0.0, pause_seconds),
+        "reasoning_effort": reasoning_effort,
         "artifacts_root": str(artifacts_root),
         "task_count": len(tasks),
         "passed": passed,
@@ -158,6 +163,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--max-output-tokens",
         type=int,
         help="Optional maximum number of output tokens.",
+    )
+    parser.add_argument(
+        "--reasoning-effort",
+        choices=("none", "low", "medium", "high", "xhigh"),
+        default="none",
+        help="Optional reasoning effort. Defaults to none.",
     )
     parser.add_argument(
         "--artifacts-root",
@@ -193,6 +204,7 @@ def main(argv: list[str] | None = None) -> int:
             base_url=args.base_url,
             temperature=args.temperature,
             max_output_tokens=args.max_output_tokens,
+            reasoning_effort=args.reasoning_effort,
             artifacts_root=args.artifacts_root,
             max_agent_iterations=args.max_agent_iterations,
             pause_seconds=args.pause_seconds,

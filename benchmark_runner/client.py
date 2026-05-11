@@ -15,6 +15,7 @@ DEFAULT_SYSTEM_PROMPT = (
 )
 LOGGER = logging.getLogger(__name__)
 LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s: %(message)s"
+REASONING_EFFORTS = ("none", "low", "medium", "high", "xhigh")
 
 
 @dataclass(frozen=True)
@@ -25,6 +26,14 @@ class LLMConfig:
     system_prompt: str = DEFAULT_SYSTEM_PROMPT
     temperature: float = 0.0
     max_output_tokens: int | None = None
+    reasoning_effort: str = "none"
+
+    def __post_init__(self) -> None:
+        if self.reasoning_effort not in REASONING_EFFORTS:
+            allowed = ", ".join(REASONING_EFFORTS)
+            raise ValueError(f"reasoning_effort must be one of: {allowed}.")
+
+
 def _first_env_with_name(names: Iterable[str]) -> tuple[str | None, str | None]:
     for name in names:
         value = os.environ.get(name)
@@ -191,7 +200,15 @@ class OpenAICompatibleLLM:
         *,
         temperature: float | None = None,
         max_output_tokens: int | None = None,
+        reasoning_effort: str | None = None,
     ) -> dict[str, Any]:
+        effective_reasoning_effort = (
+            self.config.reasoning_effort if reasoning_effort is None else reasoning_effort
+        )
+        if effective_reasoning_effort not in REASONING_EFFORTS:
+            allowed = ", ".join(REASONING_EFFORTS)
+            raise ValueError(f"reasoning_effort must be one of: {allowed}.")
+
         request: dict[str, Any] = {
             "model": self.config.model,
             "messages": messages,
@@ -206,17 +223,26 @@ class OpenAICompatibleLLM:
         if effective_max_tokens is not None:
             request["max_tokens"] = effective_max_tokens
 
+        if effective_reasoning_effort != "none":
+            request["reasoning"] = {"effort": effective_reasoning_effort}
+
         LOGGER.info(
-            "Sending chat completion request model=%s message_count=%d temperature=%s max_tokens=%s",
+            "Sending chat completion request model=%s message_count=%d temperature=%s max_tokens=%s reasoning_effort=%s",
             request["model"],
             len(messages),
             request["temperature"],
             request.get("max_tokens"),
+            effective_reasoning_effort,
         )
         LOGGER.debug("Request message stats: %s", _message_stats(messages))
 
+        sdk_request = dict(request)
+        reasoning = sdk_request.pop("reasoning", None)
+        if reasoning is not None:
+            sdk_request["extra_body"] = {"reasoning": reasoning}
+
         try:
-            response = self.client.chat.completions.create(**request)
+            response = self.client.chat.completions.create(**sdk_request)
         except Exception:
             LOGGER.exception(
                 "Chat completion request failed model=%s base_url=%s",

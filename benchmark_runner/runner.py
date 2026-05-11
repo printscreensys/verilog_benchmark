@@ -321,6 +321,7 @@ class BenchmarkRunner:
             "task_dir": task.relative_dir,
             "run_dir": _display_path(run_dir),
             "model": self.llm.config.model,
+            "reasoning_effort": self.llm.config.reasoning_effort,
             **results,
         }
         _write_json(run_dir / "results.json", final_results)
@@ -328,6 +329,9 @@ class BenchmarkRunner:
 
     def _create_run_dir(self, task: BenchmarkTask) -> Path:
         model_dir = _safe_path_component(self.llm.config.model)
+        if self.llm.config.reasoning_effort != "none":
+            reasoning_dir = _safe_path_component(self.llm.config.reasoning_effort)
+            model_dir = f"{model_dir}-reasoning-{reasoning_dir}"
         base_dir = self.options.artifacts_root / model_dir / task.task_id
         run_dir = base_dir / _utc_run_id()
         counter = 1
@@ -771,6 +775,7 @@ def run_task(
     base_url: str | None = None,
     temperature: float = 0.7,
     max_output_tokens: int | None = None,
+    reasoning_effort: str = "none",
     artifacts_root: str | Path | None = None,
     max_agent_iterations: int | None = None,
 ) -> dict[str, Any]:
@@ -781,6 +786,7 @@ def run_task(
             base_url=base_url,
             temperature=temperature,
             max_output_tokens=max_output_tokens,
+            reasoning_effort=reasoning_effort,
         )
     )
     options = RunOptions(

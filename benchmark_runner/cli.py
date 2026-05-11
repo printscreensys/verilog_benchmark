@@ -43,6 +43,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional maximum number of output tokens.",
     )
     run_parser.add_argument(
+        "--reasoning-effort",
+        choices=("none", "low", "medium", "high", "xhigh"),
+        default="none",
+        help="Optional reasoning effort. Defaults to none.",
+    )
+    run_parser.add_argument(
         "--artifacts-root",
         default="tmp/llm_runs",
         help="Directory for prompts, responses, generated files, and reports.",
@@ -117,6 +123,7 @@ def _handle_run(args: argparse.Namespace) -> int:
             base_url=args.base_url,
             temperature=args.temperature,
             max_output_tokens=args.max_output_tokens,
+            reasoning_effort=args.reasoning_effort,
         )
     )
     runner = BenchmarkRunner(
